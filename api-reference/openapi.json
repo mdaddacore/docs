@@ -1,94 +1,83 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
+    "title": "Mdadda API",
+    "description": "House helper marketplace platform API connecting house helpers with house holders in Kenya. Features include authentication, real-time chat, marketplace tokens, and comprehensive matching algorithms.",
+    "contact": {
+      "name": "Mdadda Support",
+      "email": "support@mdadda.com"
+    },
     "license": {
-      "name": "MIT"
+      "name": "Proprietary"
     },
     "version": "1.0.0"
   },
   "servers": [
     {
-      "url": "http://sandbox.mintlify.com"
+      "url": "https://api.mdadda.com/api/v1",
+      "description": "Production server"
+    },
+    {
+      "url": "https://staging-api.mdadda.com/api/v1",
+      "description": "Staging server"
+    },
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "Local development server"
     }
   ],
   "security": [
+    {
+      "firebaseAuth": []
+    },
     {
       "bearerAuth": []
     }
   ],
   "paths": {
-    "/plants": {
-      "get": {
-        "description": "Returns all plants from the system that the user has access to",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of results to return",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
+    "/auth/register/basic/": {
       "post": {
-        "description": "Creates a new plant in the store",
+        "tags": ["Authentication"],
+        "summary": "Basic user registration",
+        "description": "Create a new user account with minimal required information. User will need to complete onboarding separately.",
+        "security": [],
         "requestBody": {
-          "description": "Plant to add to the store",
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+                "$ref": "#/components/schemas/BasicRegisterRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
-          "200": {
-            "description": "plant response",
+          "201": {
+            "description": "User account created successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Plant"
+                  "$ref": "#/components/schemas/BasicRegisterResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "unexpected error",
+            "description": "Validation error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -96,32 +85,507 @@
         }
       }
     },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
-        "parameters": [
+    "/auth/onboarding/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Complete user onboarding",
+        "description": "Complete user profile setup after basic registration. Required fields vary by user role.",
+        "security": [
           {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
+            "firebaseAuth": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
-          },
-          "400": {
-            "description": "unexpected error",
+          "200": {
+            "description": "Profile completed successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/OnboardingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User login",
+        "description": "Authenticate user with email and password. Returns Firebase tokens and user information.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User logout",
+        "description": "Log out the current user and invalidate their session.",
+        "security": [
+          {
+            "firebaseAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Legacy complete registration",
+        "description": "Legacy endpoint for complete user registration in one step. Will be deprecated in favor of basic registration + onboarding flow.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/LegacyRegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegacyRegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh-token/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Refresh authentication token",
+        "description": "Refresh Firebase authentication token using user UID.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/social-auth/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Social authentication",
+        "description": "Authenticate using social providers (Google, Facebook) with two-step flow: init and complete.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SocialAuthInitRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SocialAuthCompleteRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Social authentication successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SocialAuthInitResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SocialAuthCompleteResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid auth_type or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/change-password/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Change user password",
+        "description": "Change the current user's password. Requires current password for verification.",
+        "security": [
+          {
+            "firebaseAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid current password or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reset-password/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Reset user password",
+        "description": "Handle password reset - either send reset email or reset password with token.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset email sent or password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/delete-account/": {
+      "delete": {
+        "tags": ["Authentication"],
+        "summary": "Delete user account",
+        "description": "Permanently delete the current user's account and all associated data.",
+        "security": [
+          {
+            "firebaseAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid email or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/restore-account/": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Restore deleted account (Admin only)",
+        "description": "Restore a soft-deleted user account. Only administrators can access this endpoint.",
+        "security": [
+          {
+            "firebaseAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account restored successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user_id or account cannot be restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only administrators can restore accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/deletion-info/": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get account deletion information",
+        "description": "Get information about what data will be deleted when an account is removed.",
+        "security": [
+          {
+            "firebaseAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account deletion information retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionInfoResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -131,22 +595,42 @@
     }
   },
   "webhooks": {
-    "/plant/webhook": {
+    "/webhooks/user-verification": {
       "post": {
-        "description": "Information about a new plant added to the store",
+        "description": "Notification when user verification status changes",
         "requestBody": {
-          "description": "Plant added to the store",
+          "description": "User verification event data",
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+                "$ref": "#/components/schemas/UserVerificationWebhook"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "/webhooks/match-created": {
+      "post": {
+        "description": "Notification when a new match is created between helper and holder",
+        "requestBody": {
+          "description": "Match creation event data",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchCreatedWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
           }
         }
       }
@@ -154,63 +638,892 @@
   },
   "components": {
     "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
+      "BasicRegisterRequest": {
         "type": "object",
+        "required": ["email", "password", "first_name", "last_name", "role"],
         "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address",
+            "example": "john.doe@example.com"
           },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "User's password (minimum 8 characters)",
+            "example": "SecurePass123!"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name",
+            "example": "Doe"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["house_helper", "house_holder"],
+            "description": "User's role in the platform",
+            "example": "house_helper"
+          },
+          "username": {
+            "type": "string",
+            "description": "Optional username (auto-generated if not provided)",
+            "example": "john_doe_123"
           }
         }
       },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
+      "OnboardingRequest": {
+        "type": "object",
+        "properties": {
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of birth (required for house helpers only)",
+            "example": "1990-05-15"
           },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
-              }
-            }
+          "phone_number": {
+            "type": "string",
+            "description": "Phone number in international format (Kenya region)",
+            "example": "+254712345678"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of skill names (required for house helpers)",
+            "example": ["cooking", "cleaning", "childcare"]
+          },
+          "nationality": {
+            "type": "string",
+            "description": "User's nationality",
+            "example": "Kenyan"
+          },
+          "household_size": {
+            "type": "integer",
+            "description": "Number of people in the household (for house holders)",
+            "example": 4,
+            "default": 1
+          },
+          "job_type": {
+            "type": "string",
+            "description": "Job type for house helpers",
+            "example": "full_time"
+          },
+          "bio": {
+            "type": "string",
+            "description": "User biography",
+            "example": "Experienced house helper with 5 years of experience..."
+          },
+          "current_city": {
+            "type": "string",
+            "description": "Current city of residence",
+            "example": "Nairobi"
+          },
+          "experience_years": {
+            "type": "integer",
+            "description": "Years of experience for house helpers",
+            "example": 5
+          },
+          "hourly_rate": {
+            "type": "number",
+            "format": "decimal",
+            "description": "Hourly rate for house helpers",
+            "example": 500.00
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Languages spoken",
+            "example": ["English", "Swahili"]
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Certifications held",
+            "example": ["First Aid", "CPR"]
+          },
+          "tagline": {
+            "type": "string",
+            "description": "Professional tagline",
+            "example": "Reliable and experienced house helper"
+          },
+          "preferred_days_off": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Preferred days off",
+            "example": ["Sunday"]
+          },
+          "interview_availability": {
+            "type": "string",
+            "description": "Interview availability",
+            "example": "Weekdays 9AM-5PM"
+          },
+          "willing_to_travel": {
+            "type": "boolean",
+            "description": "Willing to travel for work",
+            "example": true
+          },
+          "max_travel_distance": {
+            "type": "integer",
+            "description": "Maximum travel distance in km",
+            "example": 50
+          },
+          "gender": {
+            "type": "string",
+            "enum": ["male", "female", "other"],
+            "description": "User's gender",
+            "example": "female"
+          },
+          "education_level": {
+            "type": "string",
+            "enum": ["primary", "secondary", "diploma", "degree", "masters", "phd", "other"],
+            "description": "Education level",
+            "example": "secondary"
+          },
+          "preferred_working_hours": {
+            "type": "string",
+            "enum": ["full_day", "half_day", "flexible", "night_shift"],
+            "description": "Preferred working hours",
+            "example": "full_day"
+          },
+          "residence_type": {
+            "type": "string",
+            "description": "Type of residence for house holders",
+            "example": "apartment"
+          },
+          "neighborhood": {
+            "type": "string",
+            "description": "Neighborhood for house holders",
+            "example": "Westlands"
+          },
+          "availability_from": {
+            "type": "string",
+            "format": "date",
+            "description": "Available from date for house helpers",
+            "example": "2024-02-01"
+          },
+          "number_of_children": {
+            "type": "integer",
+            "description": "Number of children in household",
+            "example": 2
+          },
+          "has_pets": {
+            "type": "boolean",
+            "description": "Whether household has pets",
+            "example": true
+          },
+          "pet_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Types of pets in household",
+            "example": ["dog", "cat"]
+          },
+          "work_schedule": {
+            "type": "string",
+            "description": "Preferred work schedule for house holders",
+            "example": "Monday to Friday"
+          },
+          "experience_required": {
+            "type": "string",
+            "description": "Required experience level for house holders",
+            "example": "2+ years"
+          },
+          "salary_range_min": {
+            "type": "integer",
+            "description": "Minimum salary range for house holders",
+            "example": 20000
+          },
+          "salary_range_max": {
+            "type": "integer",
+            "description": "Maximum salary range for house holders",
+            "example": 40000
+          },
+          "expected_start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Expected start date for house holders",
+            "example": "2024-02-15"
+          },
+          "profile_picture": {
+            "type": "string",
+            "format": "binary",
+            "description": "Profile picture file"
           }
-        ]
+        }
       },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address",
+            "example": "john.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User's password",
+            "example": "SecurePass123!"
+          },
+          "fcm_token": {
+            "type": "string",
+            "description": "Firebase Cloud Messaging token for push notifications",
+            "example": "fcm_token_123..."
+          },
+          "device_id": {
+            "type": "string",
+            "description": "Unique device identifier",
+            "example": "device_123"
+          },
+          "device_type": {
+            "type": "string",
+            "enum": ["ios", "android", "web"],
+            "description": "Type of device",
+            "example": "android"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["uid"],
+        "properties": {
+          "uid": {
+            "type": "string",
+            "description": "Firebase user UID",
+            "example": "firebase_uid_123..."
+          }
+        }
+      },
+      "SocialAuthInitRequest": {
+        "type": "object",
+        "required": ["auth_type", "provider", "redirect_uri"],
+        "properties": {
+          "auth_type": {
+            "type": "string",
+            "enum": ["init"],
+            "description": "Authentication type - must be 'init' for initialization",
+            "example": "init"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["google", "facebook"],
+            "description": "Social authentication provider",
+            "example": "google"
+          },
+          "redirect_uri": {
+            "type": "string",
+            "format": "uri",
+            "description": "Redirect URI for OAuth flow",
+            "example": "https://yourdomain.com/auth/callback"
+          }
+        }
+      },
+      "SocialAuthCompleteRequest": {
+        "type": "object",
+        "required": ["auth_type", "provider", "code", "redirect_uri"],
+        "properties": {
+          "auth_type": {
+            "type": "string",
+            "enum": ["complete"],
+            "description": "Authentication type - must be 'complete' for completion",
+            "example": "complete"
+          },
+          "provider": {
+            "type": "string",
+            "enum": ["google", "facebook"],
+            "description": "Social authentication provider",
+            "example": "google"
+          },
+          "code": {
+            "type": "string",
+            "description": "OAuth authorization code",
+            "example": "oauth_code_123..."
+          },
+          "redirect_uri": {
+            "type": "string",
+            "format": "uri",
+            "description": "Redirect URI for OAuth flow",
+            "example": "https://yourdomain.com/auth/callback"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["current_password", "new_password"],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "description": "Current password for verification",
+            "example": "OldPassword123!"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "New password (minimum 8 characters)",
+            "example": "NewSecurePass123!"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address to send reset link or for token-based reset",
+            "example": "john.doe@example.com"
+          },
+          "token": {
+            "type": "string",
+            "description": "Firebase oobCode token (for token-based reset)",
+            "example": "firebase_oob_code_123..."
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "New password (for token-based reset)",
+            "example": "NewSecurePass123!"
+          },
+          "confirm_password": {
+            "type": "string",
+            "description": "Confirm new password (for token-based reset)",
+            "example": "NewSecurePass123!"
+          }
+        }
+      },
+      "DeleteAccountRequest": {
+        "type": "object",
+        "required": ["email", "confirm_deletion"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address for confirmation",
+            "example": "john.doe@example.com"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Optional reason for account deletion",
+            "example": "No longer need the service"
+          },
+          "confirm_deletion": {
+            "type": "boolean",
+            "description": "User must confirm they want to delete their account",
+            "example": true
+          }
+        }
+      },
+      "BasicRegisterResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "User account created successfully. Please complete your profile."
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokenResponse"
+          },
+          "onboarding_required": {
+            "type": "boolean",
+            "description": "Whether onboarding is required",
+            "example": true
+          }
+        }
+      },
+      "LegacyRegisterResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "User registered successfully"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokenResponse"
+          }
+        }
+      },
+      "OnboardingResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Profile completed successfully"
+          },
+          "onboarding_completed": {
+            "type": "boolean",
+            "description": "Confirmation that onboarding is complete",
+            "example": true
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Login successful"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokenResponse"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "Firebase access token",
+            "example": "eyJhbGciOiJSUzI1NiIs..."
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Firebase refresh token",
+            "example": "refresh_token_123..."
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Token expiration time in seconds",
+            "example": 3600
+          },
+          "token_type": {
+            "type": "string",
+            "description": "Type of token",
+            "example": "Bearer"
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User's unique identifier",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address",
+            "example": "john.doe@example.com"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name",
+            "example": "Doe"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "house_helper", "house_holder"],
+            "description": "User's role",
+            "example": "house_helper"
+          },
+          "is_verified": {
+            "type": "boolean",
+            "description": "Whether user is verified",
+            "example": true
+          },
+          "profile_picture": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to profile picture",
+            "example": "https://res.cloudinary.com/mdadda/image/upload/v1234567890/profile.jpg"
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "User's phone number",
+            "example": "+254712345678"
+          },
+          "current_city": {
+            "type": "string",
+            "description": "User's current city",
+            "example": "Nairobi"
+          },
+          "is_active": {
+            "type": "boolean",
+            "description": "Whether user account is active",
+            "example": true
+          },
+          "date_joined": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Date user joined the platform",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Operation completed successfully"
+          }
+        }
+      },
+      "ErrorResponse": {
         "type": "object",
         "properties": {
           "error": {
-            "type": "integer",
-            "format": "int32"
+            "type": "string",
+            "description": "Error message",
+            "example": "Validation failed"
           },
+          "details": {
+            "type": "object",
+            "description": "Additional error details",
+            "example": {
+              "email": ["This field is required"]
+            }
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code",
+            "example": "VALIDATION_ERROR"
+          }
+        }
+      },
+      "UserVerificationWebhook": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": ["user.verification.completed", "user.verification.failed"],
+            "example": "user.verification.completed"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "verification_type": {
+            "type": "string",
+            "enum": ["identity", "background_check", "email", "phone"],
+            "example": "identity"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["verified", "failed", "pending"],
+            "example": "verified"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "MatchCreatedWebhook": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": ["match.created"],
+            "example": "match.created"
+          },
+          "match_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "helper_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174001"
+          },
+          "holder_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174002"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-15T10:30:00Z"
+          }
+        }
+      },
+      "LegacyRegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "first_name", "last_name", "dob", "phone_number", "role"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address",
+            "example": "john.doe@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "User's password (minimum 8 characters)",
+            "example": "SecurePass123!"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "User's first name",
+            "example": "John"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name",
+            "example": "Doe"
+          },
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of birth (YYYY-MM-DD)",
+            "example": "1990-05-15"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of skill names (required for house helpers)",
+            "example": ["cooking", "cleaning", "childcare"]
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "Phone number in international format",
+            "example": "+254712345678"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["house_helper", "house_holder"],
+            "description": "User's role in the platform",
+            "example": "house_helper"
+          },
+          "username": {
+            "type": "string",
+            "description": "Optional username (auto-generated if not provided)",
+            "example": "john_doe_123"
+          },
+          "job_type": {
+            "type": "string",
+            "description": "Job type for house helpers",
+            "example": "full_time"
+          },
+          "nationality": {
+            "type": "string",
+            "description": "User's nationality",
+            "example": "Kenyan"
+          },
+          "household_size": {
+            "type": "integer",
+            "description": "Number of people in household (for house holders)",
+            "example": 4,
+            "default": 1
+          }
+        }
+      },
+      "SocialAuthInitResponse": {
+        "type": "object",
+        "properties": {
+          "auth_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "OAuth authorization URL",
+            "example": "https://accounts.google.com/oauth/authorize?..."
+          }
+        }
+      },
+      "SocialAuthCompleteResponse": {
+        "type": "object",
+        "properties": {
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "Success message",
+            "example": "Social authentication successful"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokenResponse"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "User's unique identifier",
+                "example": "123e4567-e89b-12d3-a456-426614174000"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "description": "User's email address",
+                "example": "john.doe@example.com"
+              },
+              "first_name": {
+                "type": "string",
+                "description": "User's first name",
+                "example": "John"
+              },
+              "last_name": {
+                "type": "string",
+                "description": "User's last name",
+                "example": "Doe"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["admin", "house_helper", "house_holder"],
+                "description": "User's role",
+                "example": "house_helper"
+              },
+              "is_active": {
+                "type": "boolean",
+                "description": "Whether user account is active",
+                "example": true
+              },
+              "is_staff": {
+                "type": "boolean",
+                "description": "Whether user is staff",
+                "example": false
+              },
+              "date_joined": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Date user joined the platform",
+                "example": "2024-01-15T10:30:00Z"
+              },
+              "social_provider": {
+                "type": "string",
+                "description": "Social authentication provider",
+                "example": "google"
+              },
+              "social_id": {
+                "type": "string",
+                "description": "Social provider user ID",
+                "example": "google_user_123"
+              },
+              "phone_number": {
+                "type": "string",
+                "description": "User's phone number",
+                "example": "+254712345678"
+              },
+              "dob": {
+                "type": "string",
+                "format": "date",
+                "description": "User's date of birth",
+                "example": "1990-05-15"
+              }
+            }
+          }
+        }
+      },
+      "DeleteAccountResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Account deleted successfully"
+          },
+          "deleted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of account deletion",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "warning": {
+            "type": "string",
+            "description": "Warning about account deletion",
+            "example": "This action is irreversible. All your data has been permanently removed."
+          }
+        }
+      },
+      "RestoreAccountRequest": {
+        "type": "object",
+        "required": ["user_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the user account to restore",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        }
+      },
+      "RestoreAccountResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Account restored successfully"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the restored user account",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        }
+      },
+      "AccountDeletionInfoResponse": {
+        "type": "object",
+        "properties": {
+          "data_to_delete": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of data types that will be deleted",
+            "example": ["Profile information", "Chat messages", "Matches", "Verification data"]
+          },
+          "retention_period": {
+            "type": "string",
+            "description": "Data retention period before permanent deletion",
+            "example": "30 days"
+          },
+          "warning": {
+            "type": "string",
+            "description": "Warning about account deletion",
+            "example": "Account deletion is permanent and cannot be undone"
           }
         }
       }
     },
     "securitySchemes": {
+      "firebaseAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Firebase JWT",
+        "description": "Firebase Authentication token. Include in Authorization header as 'Bearer <token>'"
+      },
       "bearerAuth": {
         "type": "http",
-        "scheme": "bearer"
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Standard JWT Bearer token"
       }
     }
   }

@@ -1,0 +1,863 @@
+---
+title: "Authentication"
+description: "Complete guide to authentication in the Mdadda API using Firebase Authentication and JWT tokens"
+icon: "shield-check"
+---
+
+## Overview
+
+The Mdadda API uses Firebase Authentication as the primary authentication method, providing secure access to the house helper marketplace platform. This system supports both email/password authentication and social login providers (Google, Facebook, Apple).
+
+<Card title="Two-Step Registration Process" icon="user-plus">
+  Mdadda uses a two-step registration process:
+  1. **Basic Registration**: Create account with minimal information
+  2. **Onboarding**: Complete profile with role-specific details
+</Card>
+
+## Authentication Flow
+
+### 1. Basic Registration
+
+Create a new user account with minimal required information. The user will need to complete onboarding separately.
+
+**Required Parameters:**
+
+- `email` (string, required): User's email address (must be unique)
+- `password` (string, required): User's password (minimum 8 characters)
+- `first_name` (string, required): User's first name
+- `last_name` (string, required): User's last name
+- `role` (string, required): User's role: `house_helper` or `house_holder`
+- `username` (string, optional): Optional username (will be auto-generated if not provided)
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/register/basic/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'jane.doe@example.com',
+    password: 'SecurePass123!',
+    first_name: 'Jane',
+    last_name: 'Doe',
+    role: 'house_helper',
+    username: 'jane_helper' // Optional
+  })
+});
+
+const data = await response.json();
+console.log('Registration successful:', data);
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/register/basic/"
+payload = {
+    "email": "jane.doe@example.com",
+    "password": "SecurePass123!",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "role": "house_helper",
+    "username": "jane_helper"  # Optional
+}
+
+response = requests.post(url, json=payload)
+data = response.json()
+print("Registration successful:", data)
+```
+
+```bash cURL
+curl -X POST https://api.mdadda.com/api/v1/auth/register/basic/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane.doe@example.com",
+    "password": "SecurePass123!",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "role": "house_helper",
+    "username": "jane_helper"
+  }'
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "message": "User account created successfully. Please complete your profile.",
+  "tokens": {
+    "access_token": "eyJhbGciOiJSUzI1NiIs...",
+    "refresh_token": "refresh_token_123...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  },
+  "onboarding_required": true
+}
+```
+
+### 2. Complete Onboarding
+
+After basic registration, users must complete their profile with role-specific information. This endpoint accepts `multipart/form-data` to handle file uploads.
+
+<Warning>
+  For house helpers, `dob`, `job_type`, and `skills` are required fields. The API will validate these based on the user's role.
+</Warning>
+
+**Common Fields (All Users):**
+
+- `phone_number` (string): Phone number in international format (Kenya region: +254...)
+- `bio` (string): User biography or description
+- `current_city` (string): Current city of residence
+- `nationality` (string): User's nationality
+- `gender` (string): User's gender: `male`, `female`, or `other`
+- `profile_picture` (file): Profile picture image file
+
+**House Helper Specific Fields:**
+
+- `dob` (date, **required**): Date of birth (YYYY-MM-DD format)
+- `job_type` (string, **required**): Job type
+- `skills` (array, **required**): Array of skill names
+- `experience_years` (integer): Years of experience
+- `hourly_rate` (decimal): Hourly rate in KES
+- `languages` (array): Languages spoken
+- `certifications` (array): Professional certifications
+- `education_level` (string): Education level options: `primary`, `secondary`, `diploma`, `degree`, `masters`, `phd`, `other`
+- `preferred_working_hours` (string): Options: `full_day`, `half_day`, `flexible`, `night_shift`
+
+**House Holder Specific Fields:**
+
+- `household_size` (integer): Number of people in household (default: 1)
+- `number_of_children` (integer): Number of children in household
+- `has_pets` (boolean): Whether household has pets
+- `salary_range_min` (integer): Minimum salary range in KES
+- `salary_range_max` (integer): Maximum salary range in KES
+
+<Tabs>
+  <Tab title="House Helper Onboarding">
+    <CodeGroup>
+    ```javascript JavaScript
+    const formData = new FormData();
+    formData.append('dob', '1990-05-15'); // Required
+    formData.append('job_type', 'full_time'); // Required
+    formData.append('phone_number', '+254712345678');
+
+    // Skills array - Required for house helpers
+    ['cooking', 'cleaning', 'childcare'].forEach(skill => {
+        formData.append('skills', skill);
+    });
+
+    formData.append('bio', 'Experienced house helper with 5 years of experience...');
+    formData.append('current_city', 'Nairobi');
+    formData.append('experience_years', '5');
+    formData.append('hourly_rate', '500.00');
+    formData.append('gender', 'female');
+    formData.append('education_level', 'secondary');
+    formData.append('preferred_working_hours', 'full_day');
+
+    // Optional file upload
+    if (profilePictureFile) {
+        formData.append('profile_picture', profilePictureFile);
+    }
+
+    const response = await fetch('https://api.mdadda.com/api/v1/auth/onboarding/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+    ```
+
+    ```python Python
+    import requests
+
+    url = "https://api.mdadda.com/api/v1/auth/onboarding/"
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Prepare form data
+    data = {
+        "dob": "1990-05-15",  # Required
+        "job_type": "full_time",  # Required
+        "phone_number": "+254712345678",
+        "bio": "Experienced house helper with 5 years of experience...",
+        "current_city": "Nairobi",
+        "experience_years": 5,
+        "hourly_rate": 500.00,
+        "gender": "female",
+        "education_level": "secondary",
+        "preferred_working_hours": "full_day"
+    }
+
+    # Handle skills array - Required for house helpers
+    skills = ["cooking", "cleaning", "childcare"]
+    for skill in skills:
+        data[f"skills"] = skill
+
+    files = {"profile_picture": open("profile.jpg", "rb")} if profile_exists else None
+
+    response = requests.post(url, headers=headers, data=data, files=files)
+    ```
+    </CodeGroup>
+  </Tab>
+
+  <Tab title="House Holder Onboarding">
+    <CodeGroup>
+    ```javascript JavaScript
+    const formData = new FormData();
+    formData.append('phone_number', '+254712345678');
+    formData.append('current_city', 'Nairobi');
+    formData.append('household_size', '4');
+    formData.append('number_of_children', '2');
+    formData.append('has_pets', 'true');
+    formData.append('bio', 'Family of 4 looking for reliable house help...');
+    formData.append('salary_range_min', '20000');
+    formData.append('salary_range_max', '40000');
+    formData.append('expected_start_date', '2024-02-15');
+
+    // Optional pet types array
+    ['dog', 'cat'].forEach(pet => {
+        formData.append('pet_types', pet);
+    });
+
+    if (profilePictureFile) {
+        formData.append('profile_picture', profilePictureFile);
+    }
+
+    const response = await fetch('https://api.mdadda.com/api/v1/auth/onboarding/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: formData
+    });
+    ```
+
+    ```python Python
+    import requests
+
+    url = "https://api.mdadda.com/api/v1/auth/onboarding/"
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    data = {
+        "phone_number": "+254712345678",
+        "current_city": "Nairobi",
+        "household_size": 4,
+        "number_of_children": 2,
+        "has_pets": True,
+        "bio": "Family of 4 looking for reliable house help...",
+        "salary_range_min": 20000,
+        "salary_range_max": 40000,
+        "expected_start_date": "2024-02-15"
+    }
+
+    # Handle pet types array
+    pet_types = ["dog", "cat"]
+    for pet in pet_types:
+        data[f"pet_types"] = pet
+
+    files = {"profile_picture": open("profile.jpg", "rb")} if profile_exists else None
+
+    response = requests.post(url, headers=headers, data=data, files=files)
+    ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+### 3. User Login
+
+Authenticate existing users with email and password. Returns Firebase tokens for API access.
+
+**Parameters:**
+
+- `email` (string, required): User's email address
+- `password` (string, required): User's password
+- `fcm_token` (string, optional): Firebase Cloud Messaging token for push notifications
+- `device_id` (string, optional): Unique device identifier for tracking
+- `device_type` (string, optional): Device type: `android`, `ios`, or `web`
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/login/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'jane.doe@example.com',
+    password: 'SecurePass123!',
+    fcm_token: 'fcm_token_for_push_notifications', // Optional
+    device_id: 'unique_device_id', // Optional
+    device_type: 'android' // Optional
+  })
+});
+
+const data = await response.json();
+
+// Store tokens securely
+localStorage.setItem('access_token', data.tokens.access_token);
+localStorage.setItem('refresh_token', data.tokens.refresh_token);
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/login/"
+payload = {
+    "email": "jane.doe@example.com",
+    "password": "SecurePass123!",
+    "fcm_token": "fcm_token_for_push_notifications",  # Optional
+    "device_id": "unique_device_id",  # Optional
+    "device_type": "android"  # Optional
+}
+
+response = requests.post(url, json=payload)
+data = response.json()
+
+# Store tokens securely
+access_token = data["tokens"]["access_token"]
+refresh_token = data["tokens"]["refresh_token"]
+```
+
+```bash cURL
+curl -X POST https://api.mdadda.com/api/v1/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane.doe@example.com",
+    "password": "SecurePass123!",
+    "fcm_token": "fcm_token_for_push_notifications",
+    "device_id": "unique_device_id",
+    "device_type": "android"
+  }'
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "message": "Login successful",
+  "tokens": {
+    "access_token": "eyJhbGciOiJSUzI1NiIs...",
+    "refresh_token": "refresh_token_123...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+```
+
+## Social Authentication
+
+Authenticate using social providers (Google, Facebook) with a two-step OAuth flow: initialization and completion.
+
+### Step 1: Initialize Social Authentication
+
+Get the OAuth authorization URL for the selected provider.
+
+**Parameters:**
+
+- `auth_type` (string, required): Must be `init` for initialization
+- `provider` (string, required): Social provider: `google` or `facebook`
+- `redirect_uri` (string, required): Your application's OAuth callback URL
+
+<CodeGroup>
+```javascript JavaScript
+// Step 1: Initialize OAuth flow
+const response = await fetch('https://api.mdadda.com/api/v1/auth/social-auth/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    auth_type: 'init',
+    provider: 'google',
+    redirect_uri: 'https://yourdomain.com/auth/callback'
+  })
+});
+
+const data = await response.json();
+// Redirect user to data.auth_url
+window.location.href = data.auth_url;
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/social-auth/"
+payload = {
+    "auth_type": "init",
+    "provider": "google",
+    "redirect_uri": "https://yourdomain.com/auth/callback"
+}
+
+response = requests.post(url, json=payload)
+data = response.json()
+# Redirect user to data["auth_url"]
+```
+</CodeGroup>
+
+### Step 2: Complete Social Authentication
+
+After user completes OAuth flow and returns with authorization code.
+
+**Parameters:**
+
+- `auth_type` (string, required): Must be `complete` for completion
+- `provider` (string, required): Social provider: `google` or `facebook`
+- `code` (string, required): OAuth authorization code from provider
+- `redirect_uri` (string, required): Same redirect URI used in initialization
+
+<CodeGroup>
+```javascript JavaScript
+// Step 2: Complete OAuth flow (in your callback handler)
+const urlParams = new URLSearchParams(window.location.search);
+const authCode = urlParams.get('code');
+
+const response = await fetch('https://api.mdadda.com/api/v1/auth/social-auth/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    auth_type: 'complete',
+    provider: 'google',
+    code: authCode,
+    redirect_uri: 'https://yourdomain.com/auth/callback'
+  })
+});
+
+const data = await response.json();
+// Store tokens and user data
+localStorage.setItem('access_token', data.tokens.access_token);
+```
+
+```python Python
+import requests
+
+# In your OAuth callback handler
+url = "https://api.mdadda.com/api/v1/auth/social-auth/"
+payload = {
+    "auth_type": "complete",
+    "provider": "google",
+    "code": auth_code,  # From OAuth callback
+    "redirect_uri": "https://yourdomain.com/auth/callback"
+}
+
+response = requests.post(url, json=payload)
+data = response.json()
+# Store tokens and user data
+```
+</CodeGroup>
+
+**Step 1 Response (Init):**
+```json
+{
+  "auth_url": "https://accounts.google.com/oauth/authorize?client_id=..."
+}
+```
+
+**Step 2 Response (Complete):**
+```json
+{
+  "message": "Social authentication successful",
+  "tokens": {
+    "access_token": "eyJhbGciOiJSUzI1NiIs...",
+    "refresh_token": "refresh_token_123...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  },
+  "user": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "email": "jane.doe@example.com",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "role": "house_helper",
+    "is_active": true,
+    "is_staff": false,
+    "date_joined": "2024-01-15T10:30:00Z",
+    "social_provider": "google",
+    "social_id": "google_user_123",
+    "phone_number": "+254712345678",
+    "dob": "1990-05-15"
+  }
+}
+```
+
+## Token Management
+
+### Refresh Access Token
+
+When your access token expires, use the Firebase user UID to get a new token.
+
+**Parameters:**
+
+- `uid` (string, required): Firebase user UID
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/refresh-token/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    uid: 'firebase_user_uid_here'
+  })
+});
+
+const data = await response.json();
+
+// Update stored tokens
+localStorage.setItem('access_token', data.access_token);
+localStorage.setItem('refresh_token', data.refresh_token);
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/refresh-token/"
+payload = {"uid": "firebase_user_uid_here"}
+
+response = requests.post(url, json=payload)
+data = response.json()
+
+# Update stored tokens
+access_token = data["access_token"]
+refresh_token = data["refresh_token"]
+```
+</CodeGroup>
+
+### Making Authenticated Requests
+
+Include the access token in the Authorization header for all authenticated requests.
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/protected-endpoint/', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+```python Python
+import requests
+
+headers = {
+    "Authorization": f"Bearer {access_token}",
+    "Content-Type": "application/json"
+}
+
+response = requests.get(
+    "https://api.mdadda.com/api/v1/protected-endpoint/",
+    headers=headers
+)
+```
+
+```bash cURL
+curl -X GET https://api.mdadda.com/api/v1/protected-endpoint/ \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+</CodeGroup>
+
+## Password Management
+
+### Change Password
+
+Change the current user's password (requires current password for verification).
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/change-password/', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    current_password: 'OldPassword123!',
+    new_password: 'NewSecurePass123!'
+  })
+});
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/change-password/"
+headers = {"Authorization": f"Bearer {access_token}"}
+payload = {
+    "current_password": "OldPassword123!",
+    "new_password": "NewSecurePass123!"
+}
+
+response = requests.post(url, headers=headers, json=payload)
+```
+</CodeGroup>
+
+### Reset Password
+
+The password reset endpoint handles two scenarios: sending a reset email or completing a password reset with a token.
+
+#### Send Password Reset Email
+
+Send a password reset email to the user's registered email address.
+
+**Parameters:**
+
+- `email` (string, required): User's email address to send reset instructions
+
+<CodeGroup>
+```javascript JavaScript
+// Send password reset email
+const response = await fetch('https://api.mdadda.com/api/v1/auth/reset-password/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'jane.doe@example.com'
+  })
+});
+
+const data = await response.json();
+console.log(data.message); // "Password reset instructions have been sent to your email"
+```
+
+```python Python
+import requests
+
+# Send password reset email
+url = "https://api.mdadda.com/api/v1/auth/reset-password/"
+payload = {"email": "jane.doe@example.com"}
+
+response = requests.post(url, json=payload)
+data = response.json()
+print(data["message"])  # "Password reset instructions have been sent to your email"
+```
+</CodeGroup>
+
+#### Complete Password Reset with Token
+
+Reset password using the token received via email.
+
+**Parameters:**
+
+- `email` (string, required): User's email address
+- `token` (string, required): Firebase oobCode token from reset email
+- `new_password` (string, required): New password (minimum 8 characters)
+- `confirm_password` (string, required): Confirmation of new password (must match new_password)
+
+<CodeGroup>
+```javascript JavaScript
+// Reset password with token
+const response = await fetch('https://api.mdadda.com/api/v1/auth/reset-password/', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'jane.doe@example.com',
+    token: 'firebase_oob_code_from_email',
+    new_password: 'NewSecurePass123!',
+    confirm_password: 'NewSecurePass123!'
+  })
+});
+
+const data = await response.json();
+console.log(data.message); // "Password reset successful"
+```
+
+```python Python
+import requests
+
+# Reset password with token
+url = "https://api.mdadda.com/api/v1/auth/reset-password/"
+payload = {
+    "email": "jane.doe@example.com",
+    "token": "firebase_oob_code_from_email",
+    "new_password": "NewSecurePass123!",
+    "confirm_password": "NewSecurePass123!"
+}
+
+response = requests.post(url, json=payload)
+data = response.json()
+print(data["message"])  # "Password reset successful"
+```
+</CodeGroup>
+
+## User Logout
+
+Log out the current user and invalidate their session.
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/logout/', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`
+  }
+});
+
+// Clear stored tokens
+localStorage.removeItem('access_token');
+localStorage.removeItem('refresh_token');
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/logout/"
+headers = {"Authorization": f"Bearer {access_token}"}
+
+response = requests.post(url, headers=headers)
+
+# Clear stored tokens
+access_token = None
+refresh_token = None
+```
+</CodeGroup>
+
+## Account Management
+
+### Delete Account
+
+Permanently delete the current user's account and all associated data.
+
+<Warning>
+  Account deletion is permanent and cannot be undone. All user data, including matches, conversations, and verification status, will be permanently removed.
+</Warning>
+
+**Parameters:**
+
+- `email` (string, required): User's email address for confirmation (must match authenticated user's email)
+- `confirm_deletion` (boolean, required): Must be `true` to confirm account deletion
+- `reason` (string, optional): Optional reason for account deletion (max 500 characters)
+
+<CodeGroup>
+```javascript JavaScript
+const response = await fetch('https://api.mdadda.com/api/v1/auth/delete-account/', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'jane.doe@example.com', // Must match authenticated user's email
+    confirm_deletion: true,
+    reason: 'No longer need the service' // Optional
+  })
+});
+
+const data = await response.json();
+console.log(data.message); // "Account deleted successfully"
+```
+
+```python Python
+import requests
+
+url = "https://api.mdadda.com/api/v1/auth/delete-account/"
+headers = {"Authorization": f"Bearer {access_token}"}
+payload = {
+    "email": "jane.doe@example.com",  # Must match authenticated user's email
+    "confirm_deletion": True,
+    "reason": "No longer need the service"  # Optional
+}
+
+response = requests.delete(url, headers=headers, json=payload)
+data = response.json()
+print(data["message"])  # "Account deleted successfully"
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "message": "Account deleted successfully",
+  "deleted_at": "2024-01-15T10:30:00Z",
+  "warning": "This action is irreversible. All your data has been permanently removed."
+}
+```
+
+## API Endpoints Summary
+
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/auth/register/basic/` | POST | Basic user registration |
+| `/auth/onboarding/` | POST | Complete user profile |
+| `/auth/register/` | POST | Legacy complete registration (deprecated) |
+| `/auth/login/` | POST | User authentication |
+| `/auth/logout/` | POST | User logout |
+| `/auth/refresh-token/` | POST | Refresh access token |
+| `/auth/social-auth/` | POST | Social authentication (init/complete) |
+| `/auth/change-password/` | POST | Change password |
+| `/auth/reset-password/` | POST | Reset password |
+| `/auth/delete-account/` | DELETE | Delete user account |
+| `/auth/restore-account/` | POST | Restore account (admin only) |
+| `/auth/deletion-info/` | GET | Get deletion information |
+
+## Error Handling
+
+The API returns standard HTTP status codes and detailed error messages:
+
+**Common Error Responses:**
+
+```json
+// 400 Bad Request - Validation Error
+{
+  "error": "Email is already in use"
+}
+
+// 400 Bad Request - Onboarding Validation
+{
+  "error": "Date of birth is required for house helpers."
+}
+
+// 401 Unauthorized
+{
+  "error": "Invalid User Credentials"
+}
+
+// 403 Forbidden - Admin Only
+{
+  "error": "Only administrators can restore accounts"
+}
+
+// 500 Internal Server Error
+{
+  "error": "Failed to create Firebase user"
+}
+```
+
+## Security Best Practices
+
+<Tip>
+  Follow these security best practices when implementing authentication:
+</Tip>
+
+1. **Store tokens securely**: Use secure storage mechanisms (Keychain on iOS, Keystore on Android)
+2. **Handle token expiration**: Implement automatic token refresh before expiration
+3. **Validate responses**: Always check response status and handle errors appropriately
+4. **Use HTTPS**: Never send authentication data over unencrypted connections
+5. **Implement logout**: Provide clear logout functionality that clears all stored tokens
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Profiles" href="/api-reference/users" icon="user">
+    Learn how to manage user profiles and settings
+  </Card>
+  <Card title="Marketplace" href="/api-reference/marketplace" icon="store">
+    Explore marketplace features and token system
+  </Card>
+  <Card title="Matching System" href="/api-reference/matching" icon="heart">
+    Understand how helper-holder matching works
+  </Card>
+  <Card title="Real-time Chat" href="/api-reference/chat" icon="message">
+    Implement real-time messaging features
+  </Card>
+</CardGroup>
