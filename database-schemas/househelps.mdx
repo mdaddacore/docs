@@ -1,0 +1,539 @@
+---
+title: "House Helper Models Schema"
+description: "Detailed schema documentation for house helper profiles, skills, certifications, and service-related models"
+icon: "broom"
+---
+
+# House Helper Models Schema
+
+The house helper system in Mdadda provides comprehensive profile management for domestic workers, including skills tracking, certification management, experience records, and availability scheduling.
+
+## Core House Helper Model
+
+### House Helper Profile (`househelps_househelper`)
+
+Extended profile for house helpers with service-specific information and professional details.
+
+```sql
+CREATE TABLE househelps_househelper (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+
+    -- Personal information (extends base user)
+    dob DATE NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    current_city VARCHAR(100) NOT NULL,
+    nationality VARCHAR(100) DEFAULT 'Kenyan',
+    gender VARCHAR(10) CHECK (gender IN ('male', 'female', 'other')),
+
+    -- Service details
+    job_type VARCHAR(50) NOT NULL
+        CHECK (job_type IN ('house_help', 'nanny', 'cook', 'cleaner', 'gardener', 'security', 'driver', 'laundry', 'elderly_care')),
+    hourly_rate DECIMAL(10,2) CHECK (hourly_rate >= 0),
+    monthly_salary_min DECIMAL(10,2) CHECK (monthly_salary_min >= 0),
+    monthly_salary_max DECIMAL(10,2) CHECK (monthly_salary_max >= monthly_salary_min),
+
+    experience_years INTEGER CHECK (experience_years >= 0),
+    availability_status VARCHAR(20) DEFAULT 'available'
+        CHECK (availability_status IN ('available', 'busy', 'offline', 'on_leave')),
+
+    -- Work preferences
+    preferred_working_hours VARCHAR(20)
+        CHECK (preferred_working_hours IN ('full_day', 'half_day', 'flexible', 'night_shift', 'weekends_only')),
+    preferred_days_off TEXT[], -- Array of days: ['sunday', 'monday']
+    willing_to_travel BOOLEAN DEFAULT FALSE,
+    max_travel_distance INTEGER, -- in kilometers
+    live_in_preference VARCHAR(20) DEFAULT 'either'
+        CHECK (live_in_preference IN ('live_in', 'live_out', 'either')),
+
+    -- Professional information
+    education_level VARCHAR(20)
+        CHECK (education_level IN ('primary', 'secondary', 'diploma', 'degree', 'masters', 'phd', 'other')),
+    languages TEXT[], -- Array of languages: ['english', 'swahili', 'kikuyu']
+    additional_skills TEXT[], -- Non-categorized skills
+
+    -- Profile content
+    bio TEXT,
+    tagline VARCHAR(200),
+
+    -- Availability scheduling
+    availability_from DATE,
+    availability_to DATE,
+    interview_availability VARCHAR(100), -- Flexible text for interview scheduling
+
+    -- Emergency contact
+    emergency_contact_name VARCHAR(150),
+    emergency_contact_phone VARCHAR(20),
+    emergency_contact_relationship VARCHAR(50),
+
+    -- Verification status
+    background_check_status VARCHAR(20) DEFAULT 'pending'
+        CHECK (background_check_status IN ('pending', 'in_progress', 'passed', 'failed', 'expired')),
+    background_check_date DATE,
+
+    -- Profile completion and activity
+    profile_completion_percentage INTEGER DEFAULT 0 CHECK (profile_completion_percentage BETWEEN 0 AND 100),
+    last_active TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Model Fields Documentation
+
+| Field | Type | Description | Business Rules |
+|-------|------|-------------|----------------|
+| `job_type` | VARCHAR(50) | Primary service category | Maps to skill categories |
+| `hourly_rate` | DECIMAL(10,2) | Rate per hour in KES | Used for hourly contracts |
+| `monthly_salary_min/max` | DECIMAL(10,2) | Salary range for monthly contracts | Min <= Max validation |
+| `preferred_working_hours` | VARCHAR(20) | Work schedule preference | Affects matching algorithm |
+| `live_in_preference` | VARCHAR(20) | Accommodation preference | Critical for household matching |
+| `background_check_status` | VARCHAR(20) | Verification status | Affects profile visibility |
+
+## Skills and Expertise System
+
+### Core Skills Model (`core_skill`)
+
+Standardized skill taxonomy for the platform.
+
+```sql
+CREATE TABLE core_skill (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    skill_name VARCHAR(100) UNIQUE NOT NULL,
+    category VARCHAR(50) NOT NULL
+        CHECK (category IN ('cleaning', 'cooking', 'childcare', 'elderly_care', 'pet_care', 'gardening', 'laundry', 'security', 'driving', 'general')),
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    parent_skill_id UUID REFERENCES core_skill(id), -- For skill hierarchies
+    skill_level_required VARCHAR(20) DEFAULT 'beginner'
+        CHECK (skill_level_required IN ('beginner', 'intermediate', 'advanced', 'expert')),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    sort_order INTEGER DEFAULT 0
+);
+```
+
+### House Helper Skills Junction (`househelps_househelper_skills`)
+
+Many-to-many relationship tracking helper skills with proficiency levels.
+
+```sql
+CREATE TABLE househelps_househelper_skills (
+    id SERIAL PRIMARY KEY,
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+    skill_id UUID NOT NULL REFERENCES core_skill(id) ON DELETE CASCADE,
+
+    -- Proficiency details
+    proficiency_level VARCHAR(20) DEFAULT 'intermediate'
+        CHECK (proficiency_level IN ('beginner', 'intermediate', 'advanced', 'expert')),
+    years_of_experience INTEGER DEFAULT 0 CHECK (years_of_experience >= 0),
+    is_primary_skill BOOLEAN DEFAULT FALSE,
+
+    -- Certification status for this skill
+    is_certified BOOLEAN DEFAULT FALSE,
+    certification_date DATE,
+    certification_expiry DATE,
+
+    -- Notes and verification
+    notes TEXT,
+    verified_by VARCHAR(100), -- Who verified this skill
+    verification_date TIMESTAMP WITH TIME ZONE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(househelper_id, skill_id)
+);
+```
+
+### Sample Skills Data
+
+```sql
+-- Core skill categories with examples
+INSERT INTO core_skill (skill_name, category, description) VALUES
+-- Cleaning skills
+('General House Cleaning', 'cleaning', 'Basic house cleaning including dusting, sweeping, mopping'),
+('Deep Cleaning', 'cleaning', 'Thorough cleaning including carpets, windows, and hard-to-reach areas'),
+('Laundry & Ironing', 'laundry', 'Washing, drying, and ironing clothes and linens'),
+
+-- Cooking skills
+('Basic Cooking', 'cooking', 'Preparation of simple local and international meals'),
+('Kenyan Cuisine', 'cooking', 'Traditional Kenyan dishes and local food preparation'),
+('International Cuisine', 'cooking', 'Cooking various international dishes'),
+('Baking & Pastry', 'cooking', 'Baking bread, cakes, and pastry preparation'),
+
+-- Childcare skills
+('Infant Care', 'childcare', 'Care for babies and toddlers (0-3 years)'),
+('School Age Care', 'childcare', 'Care for school-going children (4-12 years)'),
+('Homework Assistance', 'childcare', 'Help with school assignments and study support'),
+
+-- Elderly care
+('Personal Care Assistance', 'elderly_care', 'Help with daily activities and personal hygiene'),
+('Medication Management', 'elderly_care', 'Assistance with medication schedules'),
+('Mobility Assistance', 'elderly_care', 'Help with walking, transfers, and physical support'),
+
+-- Pet care
+('Dog Care', 'pet_care', 'Feeding, walking, and general care for dogs'),
+('Cat Care', 'pet_care', 'Feeding and care for cats'),
+('Pet Grooming', 'pet_care', 'Basic grooming and hygiene for pets');
+```
+
+## Certification Management
+
+### Certification Model (`househelps_certification`)
+
+Professional certifications and training records.
+
+```sql
+CREATE TABLE househelps_certification (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+
+    -- Certification details
+    certification_name VARCHAR(200) NOT NULL,
+    certification_type VARCHAR(50) NOT NULL
+        CHECK (certification_type IN ('first_aid', 'childcare', 'cooking', 'security', 'driving', 'computer', 'language', 'other')),
+    issuing_organization VARCHAR(200) NOT NULL,
+
+    -- Dates and validity
+    issued_date DATE NOT NULL,
+    expiry_date DATE,
+    is_lifetime BOOLEAN DEFAULT FALSE,
+
+    -- Verification
+    certificate_number VARCHAR(100),
+    verification_status VARCHAR(20) DEFAULT 'pending'
+        CHECK (verification_status IN ('pending', 'verified', 'rejected', 'expired')),
+
+    -- File attachments
+    certificate_file_url VARCHAR(500),
+
+    -- Notes
+    description TEXT,
+    skills_covered TEXT[], -- Array of skills this certification covers
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Work Experience Records
+
+### Experience Model (`househelps_experience`)
+
+Previous work experience and references.
+
+```sql
+CREATE TABLE househelps_experience (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+
+    -- Employment details
+    employer_name VARCHAR(200),
+    employer_type VARCHAR(50)
+        CHECK (employer_type IN ('private_household', 'company', 'institution', 'agency', 'other')),
+    job_title VARCHAR(100) NOT NULL,
+    job_description TEXT,
+
+    -- Duration
+    start_date DATE NOT NULL,
+    end_date DATE,
+    is_current_job BOOLEAN DEFAULT FALSE,
+
+    -- Location
+    work_location VARCHAR(200),
+
+    -- Responsibilities and achievements
+    key_responsibilities TEXT[],
+    achievements TEXT,
+    reason_for_leaving VARCHAR(200),
+
+    -- Reference information
+    reference_name VARCHAR(150),
+    reference_phone VARCHAR(20),
+    reference_email VARCHAR(254),
+    reference_relationship VARCHAR(100),
+    reference_verified BOOLEAN DEFAULT FALSE,
+    reference_verification_date TIMESTAMP WITH TIME ZONE,
+
+    -- Salary information (optional)
+    salary_amount DECIMAL(10,2),
+    salary_period VARCHAR(20) CHECK (salary_period IN ('hourly', 'daily', 'weekly', 'monthly', 'annual')),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CHECK (
+        (end_date IS NULL AND is_current_job = TRUE) OR
+        (end_date IS NOT NULL AND is_current_job = FALSE) OR
+        (end_date IS NOT NULL AND end_date >= start_date)
+    )
+);
+```
+
+## Availability and Scheduling
+
+### Availability Schedule Model (`househelps_availability`)
+
+Detailed availability scheduling for house helpers.
+
+```sql
+CREATE TABLE househelps_availability (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+
+    -- Schedule type
+    schedule_type VARCHAR(20) NOT NULL
+        CHECK (schedule_type IN ('weekly_recurring', 'date_specific', 'temporary_unavailable')),
+
+    -- Day of week (for recurring schedules)
+    day_of_week INTEGER CHECK (day_of_week BETWEEN 0 AND 6), -- 0=Sunday, 6=Saturday
+
+    -- Specific date (for date-specific availability)
+    specific_date DATE,
+
+    -- Time slots
+    start_time TIME,
+    end_time TIME,
+    is_available BOOLEAN DEFAULT TRUE,
+
+    -- Recurring pattern
+    is_recurring BOOLEAN DEFAULT FALSE,
+    recurrence_end_date DATE,
+
+    -- Notes
+    notes TEXT,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CHECK (
+        (schedule_type = 'weekly_recurring' AND day_of_week IS NOT NULL) OR
+        (schedule_type = 'date_specific' AND specific_date IS NOT NULL) OR
+        (schedule_type = 'temporary_unavailable')
+    ),
+    CHECK (start_time < end_time)
+);
+```
+
+## Profile Analytics and Metrics
+
+### Helper Performance Metrics (`househelps_performancemetrics`)
+
+Track helper engagement and success metrics.
+
+```sql
+CREATE TABLE househelps_performancemetrics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+
+    -- Profile metrics
+    profile_views INTEGER DEFAULT 0,
+    profile_likes_received INTEGER DEFAULT 0,
+    profile_super_likes_received INTEGER DEFAULT 0,
+
+    -- Matching metrics
+    matches_count INTEGER DEFAULT 0,
+    active_conversations INTEGER DEFAULT 0,
+    response_rate DECIMAL(5,2) DEFAULT 0 CHECK (response_rate BETWEEN 0 AND 100),
+    avg_response_time_hours DECIMAL(8,2) DEFAULT 0,
+
+    -- Engagement metrics
+    last_profile_update TIMESTAMP WITH TIME ZONE,
+    days_since_last_update INTEGER DEFAULT 0,
+    profile_completeness_score INTEGER DEFAULT 0 CHECK (profile_completeness_score BETWEEN 0 AND 100),
+
+    -- Success metrics
+    successful_placements INTEGER DEFAULT 0,
+    average_rating DECIMAL(3,2) DEFAULT 0 CHECK (average_rating BETWEEN 0 AND 5),
+    total_reviews INTEGER DEFAULT 0,
+
+    -- Metadata
+    calculated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Common Queries and Views
+
+### Helper Profile Summary View
+
+```sql
+-- Materialized view for helper profile summaries
+CREATE MATERIALIZED VIEW helper_profile_summary AS
+SELECT
+    hh.id as helper_id,
+    u.id as user_id,
+    u.first_name,
+    u.last_name,
+    u.email,
+    hh.job_type,
+    hh.hourly_rate,
+    hh.monthly_salary_min,
+    hh.monthly_salary_max,
+    hh.experience_years,
+    hh.current_city,
+    hh.availability_status,
+    hh.background_check_status,
+    hh.profile_completion_percentage,
+
+    -- Aggregated skill information
+    COALESCE(skill_summary.skill_count, 0) as total_skills,
+    skill_summary.primary_skills,
+
+    -- Certification count
+    COALESCE(cert_summary.certification_count, 0) as total_certifications,
+
+    -- Experience summary
+    COALESCE(exp_summary.years_of_experience, 0) as total_work_experience,
+    exp_summary.previous_employers,
+
+    -- Performance metrics
+    pm.profile_views,
+    pm.matches_count,
+    pm.average_rating,
+    pm.total_reviews,
+
+    -- Timestamps
+    hh.created_at,
+    hh.updated_at,
+    hh.last_active
+
+FROM househelps_househelper hh
+JOIN users_user u ON hh.user_id = u.id
+LEFT JOIN (
+    SELECT
+        hhs.househelper_id,
+        COUNT(*) as skill_count,
+        STRING_AGG(
+            CASE WHEN hhs.is_primary_skill THEN s.skill_name END,
+            ', ' ORDER BY s.skill_name
+        ) as primary_skills
+    FROM househelps_househelper_skills hhs
+    JOIN core_skill s ON hhs.skill_id = s.id
+    GROUP BY hhs.househelper_id
+) skill_summary ON hh.id = skill_summary.househelper_id
+LEFT JOIN (
+    SELECT
+        househelper_id,
+        COUNT(*) as certification_count
+    FROM househelps_certification
+    WHERE verification_status = 'verified'
+        AND (expiry_date IS NULL OR expiry_date > CURRENT_DATE)
+    GROUP BY househelper_id
+) cert_summary ON hh.id = cert_summary.househelper_id
+LEFT JOIN (
+    SELECT
+        househelper_id,
+        SUM(
+            CASE
+                WHEN end_date IS NOT NULL THEN
+                    EXTRACT(YEAR FROM AGE(end_date, start_date))
+                ELSE
+                    EXTRACT(YEAR FROM AGE(CURRENT_DATE, start_date))
+            END
+        ) as years_of_experience,
+        COUNT(*) as previous_employers
+    FROM househelps_experience
+    GROUP BY househelper_id
+) exp_summary ON hh.id = exp_summary.househelper_id
+LEFT JOIN househelps_performancemetrics pm ON hh.id = pm.househelper_id
+WHERE u.is_active = TRUE;
+
+-- Index for the materialized view
+CREATE INDEX idx_helper_summary_city_job ON helper_profile_summary(current_city, job_type);
+CREATE INDEX idx_helper_summary_availability ON helper_profile_summary(availability_status);
+CREATE INDEX idx_helper_summary_rating ON helper_profile_summary(average_rating DESC);
+```
+
+### Skills Search Query
+
+```sql
+-- Find helpers by skills with proficiency filtering
+SELECT DISTINCT
+    h.user_id,
+    h.first_name,
+    h.last_name,
+    h.job_type,
+    h.hourly_rate,
+    h.current_city,
+    h.availability_status,
+    array_agg(
+        json_build_object(
+            'skill_name', s.skill_name,
+            'proficiency_level', hhs.proficiency_level,
+            'years_experience', hhs.years_of_experience,
+            'is_certified', hhs.is_certified
+        ) ORDER BY hhs.is_primary_skill DESC, hhs.proficiency_level DESC
+    ) as skills
+FROM helper_profile_summary h
+JOIN househelps_househelper_skills hhs ON h.helper_id = hhs.househelper_id
+JOIN core_skill s ON hhs.skill_id = s.id
+WHERE h.availability_status = 'available'
+    AND h.current_city = $1
+    AND s.skill_name = ANY($2) -- Array of required skills
+    AND hhs.proficiency_level IN ('advanced', 'expert')
+GROUP BY h.user_id, h.first_name, h.last_name, h.job_type, h.hourly_rate, h.current_city, h.availability_status
+HAVING COUNT(DISTINCT s.id) >= $3; -- Minimum number of matching skills
+```
+
+## Performance Optimization
+
+### Indexes for Query Performance
+
+```sql
+-- Core helper table indexes
+CREATE INDEX idx_househelper_user ON househelps_househelper(user_id);
+CREATE INDEX idx_househelper_city_job ON househelps_househelper(current_city, job_type);
+CREATE INDEX idx_househelper_availability ON househelps_househelper(availability_status);
+CREATE INDEX idx_househelper_rate_range ON househelps_househelper(hourly_rate, monthly_salary_min, monthly_salary_max);
+CREATE INDEX idx_househelper_active ON househelps_househelper(last_active);
+
+-- Skills junction table indexes
+CREATE INDEX idx_helper_skills_helper ON househelps_househelper_skills(househelper_id);
+CREATE INDEX idx_helper_skills_skill ON househelps_househelper_skills(skill_id);
+CREATE INDEX idx_helper_skills_proficiency ON househelps_househelper_skills(proficiency_level);
+CREATE INDEX idx_helper_skills_primary ON househelps_househelper_skills(is_primary_skill) WHERE is_primary_skill = TRUE;
+
+-- Experience table indexes
+CREATE INDEX idx_experience_helper ON househelps_experience(househelper_id);
+CREATE INDEX idx_experience_current ON househelps_experience(is_current_job) WHERE is_current_job = TRUE;
+CREATE INDEX idx_experience_dates ON househelps_experience(start_date, end_date);
+
+-- Certification indexes
+CREATE INDEX idx_certification_helper ON househelps_certification(househelper_id);
+CREATE INDEX idx_certification_type ON househelps_certification(certification_type);
+CREATE INDEX idx_certification_status ON househelps_certification(verification_status);
+CREATE INDEX idx_certification_expiry ON househelps_certification(expiry_date) WHERE expiry_date IS NOT NULL;
+
+-- Availability indexes
+CREATE INDEX idx_availability_helper ON househelps_availability(househelper_id);
+CREATE INDEX idx_availability_schedule ON househelps_availability(schedule_type, day_of_week);
+CREATE INDEX idx_availability_date ON househelps_availability(specific_date) WHERE specific_date IS NOT NULL;
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Household Models" href="/database-schemas/households" icon="house">
+    House holder profiles and requirement schemas
+  </Card>
+  <Card title="User Models" href="/database-schemas/users" icon="users">
+    User management and authentication schemas
+  </Card>
+  <Card title="Marketplace Models" href="/database-schemas/marketplace" icon="store">
+    Token system and transaction schemas
+  </Card>
+  <Card title="Chat Models" href="/database-schemas/chats" icon="message">
+    Real-time messaging and conversation schemas
+  </Card>
+</CardGroup>

@@ -1,0 +1,610 @@
+---
+title: "Household Models Schema"
+description: "Comprehensive schema documentation for house holder profiles, requirements, and household management"
+icon: "house"
+---
+
+# Household Models Schema
+
+The household system in Mdadda manages house holder profiles, household requirements, job postings, and family-specific needs. This system enables effective matching between house holders and house helpers.
+
+## Core Household Model
+
+### House Holder Profile (`households_householder`)
+
+Extended profile for house holders with household-specific requirements and preferences.
+
+```sql
+CREATE TABLE households_householder (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+
+    -- Personal information (extends base user)
+    phone_number VARCHAR(20) NOT NULL,
+    current_city VARCHAR(100) NOT NULL,
+    nationality VARCHAR(100) DEFAULT 'Kenyan',
+
+    -- Household composition
+    household_size INTEGER DEFAULT 1 CHECK (household_size > 0),
+    number_of_children INTEGER DEFAULT 0 CHECK (number_of_children >= 0),
+    children_ages INTEGER[], -- Array of children ages
+    number_of_adults INTEGER DEFAULT 1 CHECK (number_of_adults > 0),
+    elderly_members INTEGER DEFAULT 0 CHECK (elderly_members >= 0),
+
+    -- Pet information
+    has_pets BOOLEAN DEFAULT FALSE,
+    pet_types TEXT[], -- Array: ['dog', 'cat', 'bird']
+    pet_count INTEGER DEFAULT 0 CHECK (pet_count >= 0),
+    pet_care_required BOOLEAN DEFAULT FALSE,
+
+    -- Property details
+    residence_type VARCHAR(50)
+        CHECK (residence_type IN ('apartment', 'house', 'villa', 'townhouse', 'maisonette', 'bungalow', 'mansion')),
+    property_size VARCHAR(20)
+        CHECK (property_size IN ('studio', 'one_bedroom', 'two_bedroom', 'three_bedroom', 'four_bedroom', 'five_plus_bedroom')),
+    has_garden BOOLEAN DEFAULT FALSE,
+    has_swimming_pool BOOLEAN DEFAULT FALSE,
+    property_floors INTEGER DEFAULT 1 CHECK (property_floors > 0),
+
+    -- Location details
+    neighborhood VARCHAR(100),
+    estate_name VARCHAR(100),
+    nearest_landmark VARCHAR(200),
+    security_features TEXT[], -- Array: ['gate', 'cctv', 'guard']
+
+    -- Work and lifestyle
+    work_schedule VARCHAR(100), -- Free text for flexibility
+    lifestyle_notes TEXT,
+    special_requirements TEXT,
+
+    -- Helper requirements
+    helper_gender_preference VARCHAR(10)
+        CHECK (helper_gender_preference IN ('male', 'female', 'no_preference')),
+    helper_age_min INTEGER CHECK (helper_age_min >= 18),
+    helper_age_max INTEGER CHECK (helper_age_max >= helper_age_min),
+    helper_experience_required INTEGER DEFAULT 0 CHECK (helper_experience_required >= 0), -- years
+
+    -- Compensation
+    salary_range_min INTEGER CHECK (salary_range_min >= 0),
+    salary_range_max INTEGER CHECK (salary_range_max >= salary_range_min),
+    salary_negotiable BOOLEAN DEFAULT TRUE,
+    includes_accommodation BOOLEAN DEFAULT FALSE,
+    includes_meals BOOLEAN DEFAULT FALSE,
+    additional_benefits TEXT[],
+
+    -- Timing and availability
+    start_date_preference DATE,
+    urgency_level VARCHAR(20) DEFAULT 'normal'
+        CHECK (urgency_level IN ('urgent', 'normal', 'flexible')),
+    trial_period_days INTEGER DEFAULT 30 CHECK (trial_period_days >= 0),
+
+    -- Interview preferences
+    interview_method VARCHAR(20) DEFAULT 'in_person'
+        CHECK (interview_method IN ('in_person', 'video_call', 'phone_call', 'any')),
+    interview_availability TEXT, -- Flexible scheduling info
+
+    -- Background check requirements
+    requires_background_check BOOLEAN DEFAULT TRUE,
+    requires_references BOOLEAN DEFAULT TRUE,
+    reference_check_required INTEGER DEFAULT 2 CHECK (reference_check_required >= 0),
+
+    -- Profile status
+    profile_completion_percentage INTEGER DEFAULT 0 CHECK (profile_completion_percentage BETWEEN 0 AND 100),
+    is_actively_hiring BOOLEAN DEFAULT TRUE,
+    last_active TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Emergency contact
+    emergency_contact_name VARCHAR(150),
+    emergency_contact_phone VARCHAR(20),
+    emergency_contact_relationship VARCHAR(50),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Job Requirements System
+
+### Job Requirement Model (`households_jobrequirement`)
+
+Specific job requirements and duties for house helper positions.
+
+```sql
+CREATE TABLE households_jobrequirement (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    householder_id UUID NOT NULL REFERENCES households_householder(id) ON DELETE CASCADE,
+
+    -- Job details
+    job_title VARCHAR(100) NOT NULL,
+    job_type VARCHAR(50) NOT NULL
+        CHECK (job_type IN ('full_time', 'part_time', 'live_in', 'live_out', 'temporary', 'contract')),
+
+    -- Schedule requirements
+    working_days_per_week INTEGER DEFAULT 6 CHECK (working_days_per_week BETWEEN 1 AND 7),
+    working_hours_per_day INTEGER DEFAULT 8 CHECK (working_hours_per_day BETWEEN 1 AND 24),
+    preferred_start_time TIME,
+    preferred_end_time TIME,
+    flexible_hours BOOLEAN DEFAULT FALSE,
+    weekend_work_required BOOLEAN DEFAULT FALSE,
+    holiday_work_required BOOLEAN DEFAULT FALSE,
+
+    -- Required skills and duties
+    primary_duties TEXT[] NOT NULL, -- Array of main responsibilities
+    secondary_duties TEXT[], -- Optional additional duties
+    required_skills TEXT[] NOT NULL, -- Array of required skill names
+    preferred_skills TEXT[], -- Nice-to-have skills
+
+    -- Experience requirements
+    minimum_experience_years INTEGER DEFAULT 0 CHECK (minimum_experience_years >= 0),
+    specific_experience_required TEXT[], -- Specific types of experience needed
+
+    -- Physical requirements
+    physical_demands TEXT[], -- Array: ['lifting', 'standing', 'walking']
+    health_requirements TEXT[], -- Any health-related requirements
+
+    -- Language requirements
+    required_languages TEXT[] DEFAULT ARRAY['english', 'swahili'],
+    language_proficiency_level VARCHAR(20) DEFAULT 'conversational'
+        CHECK (language_proficiency_level IN ('basic', 'conversational', 'fluent', 'native')),
+
+    -- Special requirements
+    special_certifications TEXT[], -- Required certifications
+    background_check_level VARCHAR(20) DEFAULT 'standard'
+        CHECK (background_check_level IN ('basic', 'standard', 'enhanced')),
+    drug_test_required BOOLEAN DEFAULT FALSE,
+
+    -- Employment terms
+    probation_period_months INTEGER DEFAULT 3 CHECK (probation_period_months >= 0),
+    contract_duration_months INTEGER CHECK (contract_duration_months > 0), -- NULL for permanent
+    notice_period_days INTEGER DEFAULT 30 CHECK (notice_period_days >= 0),
+
+    -- Additional requirements
+    own_transport_required BOOLEAN DEFAULT FALSE,
+    smartphone_required BOOLEAN DEFAULT FALSE,
+    uniform_provided BOOLEAN DEFAULT TRUE,
+    equipment_provided BOOLEAN DEFAULT TRUE,
+
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    priority_level INTEGER DEFAULT 1 CHECK (priority_level BETWEEN 1 AND 5),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Family Member Management
+
+### Family Member Model (`households_familymember`)
+
+Track family members and their specific care requirements.
+
+```sql
+CREATE TABLE households_familymember (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    householder_id UUID NOT NULL REFERENCES households_householder(id) ON DELETE CASCADE,
+
+    -- Member details
+    member_type VARCHAR(20) NOT NULL
+        CHECK (member_type IN ('child', 'elderly', 'spouse', 'dependent', 'other')),
+    age INTEGER CHECK (age >= 0),
+    gender VARCHAR(10) CHECK (gender IN ('male', 'female', 'other')),
+
+    -- For children
+    school_going BOOLEAN DEFAULT FALSE,
+    school_name VARCHAR(100),
+    grade_level VARCHAR(20),
+    after_school_care_needed BOOLEAN DEFAULT FALSE,
+
+    -- Special needs and requirements
+    has_special_needs BOOLEAN DEFAULT FALSE,
+    special_needs_description TEXT,
+    medical_conditions TEXT[],
+    dietary_restrictions TEXT[],
+    allergies TEXT[],
+
+    -- Care requirements
+    supervision_level VARCHAR(20) DEFAULT 'moderate'
+        CHECK (supervision_level IN ('minimal', 'moderate', 'high', 'constant')),
+    mobility_assistance_needed BOOLEAN DEFAULT FALSE,
+    medication_management_needed BOOLEAN DEFAULT FALSE,
+
+    -- Activities and interests
+    favorite_activities TEXT[],
+    behavioral_notes TEXT,
+    emergency_instructions TEXT,
+
+    -- Schedule
+    daily_routine TEXT,
+    pickup_dropoff_required BOOLEAN DEFAULT FALSE,
+    pickup_dropoff_details TEXT,
+
+    -- Emergency contact specific to this member
+    emergency_contact_name VARCHAR(150),
+    emergency_contact_phone VARCHAR(20),
+    emergency_contact_relationship VARCHAR(50),
+
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Property and Environment Details
+
+### Property Features Model (`households_propertyfeature`)
+
+Detailed property features that affect house helper work requirements.
+
+```sql
+CREATE TABLE households_propertyfeature (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    householder_id UUID NOT NULL REFERENCES households_householder(id) ON DELETE CASCADE,
+
+    -- Physical features
+    total_rooms INTEGER CHECK (total_rooms > 0),
+    bedrooms INTEGER CHECK (bedrooms >= 0),
+    bathrooms INTEGER CHECK (bathrooms >= 0),
+    kitchen_type VARCHAR(20) CHECK (kitchen_type IN ('modern', 'traditional', 'basic', 'luxury')),
+    laundry_area BOOLEAN DEFAULT FALSE,
+    outdoor_space BOOLEAN DEFAULT FALSE,
+
+    -- Appliances and equipment
+    has_washing_machine BOOLEAN DEFAULT FALSE,
+    has_dishwasher BOOLEAN DEFAULT FALSE,
+    has_vacuum_cleaner BOOLEAN DEFAULT FALSE,
+    has_air_conditioning BOOLEAN DEFAULT FALSE,
+    has_generator BOOLEAN DEFAULT FALSE,
+
+    -- Cleaning requirements
+    floor_types TEXT[], -- Array: ['tiles', 'carpet', 'wood', 'marble']
+    window_count INTEGER DEFAULT 0,
+    special_cleaning_items TEXT[], -- Items requiring special care
+    cleaning_products_provided BOOLEAN DEFAULT TRUE,
+
+    -- Security and access
+    security_system_type VARCHAR(50),
+    access_control_method VARCHAR(50), -- How helper gets access
+    parking_available BOOLEAN DEFAULT FALSE,
+    helper_accommodation_details TEXT,
+
+    -- Environmental factors
+    area_safety_level VARCHAR(20) DEFAULT 'safe'
+        CHECK (area_safety_level IN ('very_safe', 'safe', 'moderate', 'caution_required')),
+    noise_level VARCHAR(20) DEFAULT 'quiet'
+        CHECK (noise_level IN ('very_quiet', 'quiet', 'moderate', 'noisy')),
+    accessibility_features TEXT[], -- For disabled access
+
+    -- Utilities and infrastructure
+    water_supply_reliability VARCHAR(20) DEFAULT 'reliable'
+        CHECK (water_supply_reliability IN ('reliable', 'intermittent', 'tank_system')),
+    power_supply_reliability VARCHAR(20) DEFAULT 'reliable'
+        CHECK (power_supply_reliability IN ('reliable', 'intermittent', 'backup_available')),
+    internet_available BOOLEAN DEFAULT TRUE,
+
+    -- Additional notes
+    special_instructions TEXT,
+    helper_workspace_details TEXT,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Household Analytics and Preferences
+
+### Household Preferences Model (`households_preference`)
+
+Track household preferences for better matching.
+
+```sql
+CREATE TABLE households_preference (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    householder_id UUID NOT NULL REFERENCES households_householder(id) ON DELETE CASCADE,
+
+    -- Helper selection preferences
+    prefer_experienced_helpers BOOLEAN DEFAULT TRUE,
+    prefer_certified_helpers BOOLEAN DEFAULT FALSE,
+    prefer_local_helpers BOOLEAN DEFAULT FALSE,
+    max_commute_distance_km INTEGER DEFAULT 10 CHECK (max_commute_distance_km >= 0),
+
+    -- Communication preferences
+    preferred_communication_language VARCHAR(50) DEFAULT 'english',
+    communication_style_preference VARCHAR(20) DEFAULT 'professional'
+        CHECK (communication_style_preference IN ('formal', 'professional', 'friendly', 'casual')),
+
+    -- Cultural and religious preferences
+    cultural_background_preference TEXT[],
+    religious_considerations TEXT[],
+    dietary_preparation_requirements TEXT[],
+
+    -- Work style preferences
+    prefer_independent_workers BOOLEAN DEFAULT TRUE,
+    prefer_detail_oriented BOOLEAN DEFAULT TRUE,
+    prefer_proactive_helpers BOOLEAN DEFAULT TRUE,
+    flexibility_importance INTEGER DEFAULT 3 CHECK (flexibility_importance BETWEEN 1 AND 5),
+    reliability_importance INTEGER DEFAULT 5 CHECK (reliability_importance BETWEEN 1 AND 5),
+
+    -- Trial and evaluation preferences
+    trial_period_evaluation_criteria TEXT[],
+    performance_review_frequency VARCHAR(20) DEFAULT 'monthly'
+        CHECK (performance_review_frequency IN ('weekly', 'monthly', 'quarterly', 'as_needed')),
+
+    -- Budget and payment preferences
+    payment_frequency VARCHAR(20) DEFAULT 'monthly'
+        CHECK (payment_frequency IN ('weekly', 'bi_weekly', 'monthly')),
+    payment_method_preference VARCHAR(20) DEFAULT 'bank_transfer'
+        CHECK (payment_method_preference IN ('cash', 'bank_transfer', 'mobile_money', 'any')),
+    bonus_structure_preference TEXT,
+
+    -- Replacement and backup preferences
+    backup_helper_needed BOOLEAN DEFAULT FALSE,
+    replacement_notice_days INTEGER DEFAULT 14 CHECK (replacement_notice_days >= 0),
+
+    -- Privacy and security preferences
+    background_check_depth VARCHAR(20) DEFAULT 'standard'
+        CHECK (background_check_depth IN ('basic', 'standard', 'comprehensive')),
+    reference_check_importance INTEGER DEFAULT 4 CHECK (reference_check_importance BETWEEN 1 AND 5),
+    social_media_check_required BOOLEAN DEFAULT FALSE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Household Analytics Views
+
+### Household Summary View
+
+```sql
+-- Materialized view for household profile summaries
+CREATE MATERIALIZED VIEW household_profile_summary AS
+SELECT
+    hh.id as household_id,
+    u.id as user_id,
+    u.first_name,
+    u.last_name,
+    u.email,
+    hh.current_city,
+    hh.household_size,
+    hh.number_of_children,
+    hh.number_of_adults,
+    hh.elderly_members,
+    hh.has_pets,
+    hh.residence_type,
+    hh.property_size,
+    hh.salary_range_min,
+    hh.salary_range_max,
+    hh.includes_accommodation,
+    hh.helper_experience_required,
+    hh.is_actively_hiring,
+    hh.urgency_level,
+    hh.profile_completion_percentage,
+
+    -- Job requirements summary
+    job_summary.total_job_requirements,
+    job_summary.active_job_requirements,
+    job_summary.primary_job_types,
+
+    -- Family composition
+    family_summary.total_family_members,
+    family_summary.children_count,
+    family_summary.elderly_count,
+    family_summary.special_needs_count,
+
+    -- Property features
+    prop_summary.total_rooms,
+    prop_summary.has_modern_amenities,
+    prop_summary.cleaning_complexity_score,
+
+    -- Timestamps
+    hh.created_at,
+    hh.updated_at,
+    hh.last_active
+
+FROM households_householder hh
+JOIN users_user u ON hh.user_id = u.id
+LEFT JOIN (
+    SELECT
+        jr.householder_id,
+        COUNT(*) as total_job_requirements,
+        COUNT(*) FILTER (WHERE jr.is_active = TRUE) as active_job_requirements,
+        STRING_AGG(DISTINCT jr.job_type, ', ') as primary_job_types
+    FROM households_jobrequirement jr
+    GROUP BY jr.householder_id
+) job_summary ON hh.id = job_summary.householder_id
+LEFT JOIN (
+    SELECT
+        fm.householder_id,
+        COUNT(*) as total_family_members,
+        COUNT(*) FILTER (WHERE fm.member_type = 'child') as children_count,
+        COUNT(*) FILTER (WHERE fm.member_type = 'elderly') as elderly_count,
+        COUNT(*) FILTER (WHERE fm.has_special_needs = TRUE) as special_needs_count
+    FROM households_familymember fm
+    WHERE fm.is_active = TRUE
+    GROUP BY fm.householder_id
+) family_summary ON hh.id = family_summary.householder_id
+LEFT JOIN (
+    SELECT
+        pf.householder_id,
+        pf.total_rooms,
+        CASE
+            WHEN pf.has_washing_machine AND pf.has_dishwasher AND pf.has_vacuum_cleaner
+            THEN TRUE ELSE FALSE
+        END as has_modern_amenities,
+        -- Complexity score based on property features
+        (
+            COALESCE(pf.total_rooms, 0) +
+            CASE WHEN pf.has_swimming_pool THEN 3 ELSE 0 END +
+            CASE WHEN hh.has_garden THEN 2 ELSE 0 END +
+            array_length(pf.floor_types, 1) +
+            COALESCE(pf.window_count, 0) / 5
+        ) as cleaning_complexity_score
+    FROM households_propertyfeature pf
+    JOIN households_householder hh ON pf.householder_id = hh.id
+) prop_summary ON hh.id = prop_summary.householder_id
+WHERE u.is_active = TRUE;
+
+-- Indexes for the materialized view
+CREATE INDEX idx_household_summary_city ON household_profile_summary(current_city);
+CREATE INDEX idx_household_summary_hiring ON household_profile_summary(is_actively_hiring);
+CREATE INDEX idx_household_summary_salary ON household_profile_summary(salary_range_min, salary_range_max);
+CREATE INDEX idx_household_summary_urgency ON household_profile_summary(urgency_level);
+```
+
+### Matching Requirements Query
+
+```sql
+-- Complex query to find households matching helper capabilities
+WITH helper_capabilities AS (
+    SELECT
+        hh.user_id as helper_id,
+        hh.job_type as helper_job_type,
+        hh.hourly_rate,
+        hh.current_city,
+        hh.experience_years,
+        hh.availability_status,
+        array_agg(DISTINCT s.skill_name) as helper_skills,
+        array_agg(DISTINCT s.category) as skill_categories
+    FROM househelps_househelper hh
+    LEFT JOIN househelps_househelper_skills hhs ON hh.id = hhs.househelper_id
+    LEFT JOIN core_skill s ON hhs.skill_id = s.id
+    WHERE hh.availability_status = 'available'
+    GROUP BY hh.user_id, hh.job_type, hh.hourly_rate, hh.current_city, hh.experience_years, hh.availability_status
+),
+household_requirements AS (
+    SELECT
+        hps.household_id,
+        hps.user_id as holder_id,
+        hps.current_city,
+        hps.salary_range_min,
+        hps.salary_range_max,
+        hps.helper_experience_required,
+        hps.urgency_level,
+        jr.required_skills,
+        jr.job_type as required_job_type,
+        jr.minimum_experience_years
+    FROM household_profile_summary hps
+    LEFT JOIN households_jobrequirement jr ON hps.household_id = jr.householder_id
+    WHERE hps.is_actively_hiring = TRUE
+        AND jr.is_active = TRUE
+)
+SELECT
+    hr.holder_id,
+    hc.helper_id,
+    hr.current_city,
+    hr.urgency_level,
+
+    -- Matching score components
+    CASE
+        WHEN hr.current_city = hc.current_city THEN 20
+        ELSE 0
+    END as location_match_score,
+
+    CASE
+        WHEN hc.experience_years >= hr.helper_experience_required THEN 15
+        WHEN hc.experience_years >= (hr.helper_experience_required * 0.8) THEN 10
+        WHEN hc.experience_years >= (hr.helper_experience_required * 0.5) THEN 5
+        ELSE 0
+    END as experience_match_score,
+
+    -- Skill matching score
+    (
+        SELECT COUNT(*)
+        FROM unnest(hr.required_skills) as req_skill
+        WHERE req_skill = ANY(hc.helper_skills)
+    ) * 5 as skill_match_score,
+
+    -- Salary compatibility score
+    CASE
+        WHEN (hc.hourly_rate * 160) BETWEEN hr.salary_range_min AND hr.salary_range_max THEN 20
+        WHEN (hc.hourly_rate * 160) <= hr.salary_range_max * 1.1 THEN 15
+        WHEN (hc.hourly_rate * 160) <= hr.salary_range_max * 1.2 THEN 10
+        ELSE 0
+    END as salary_match_score
+
+FROM household_requirements hr
+CROSS JOIN helper_capabilities hc
+WHERE hr.current_city = hc.current_city -- Basic location filter
+    AND hc.experience_years >= (hr.helper_experience_required * 0.5) -- Minimum experience threshold
+HAVING (
+    -- Total matching score threshold
+    CASE WHEN hr.current_city = hc.current_city THEN 20 ELSE 0 END +
+    CASE
+        WHEN hc.experience_years >= hr.helper_experience_required THEN 15
+        WHEN hc.experience_years >= (hr.helper_experience_required * 0.8) THEN 10
+        WHEN hc.experience_years >= (hr.helper_experience_required * 0.5) THEN 5
+        ELSE 0
+    END +
+    (SELECT COUNT(*) FROM unnest(hr.required_skills) as req_skill WHERE req_skill = ANY(hc.helper_skills)) * 5 +
+    CASE
+        WHEN (hc.hourly_rate * 160) BETWEEN hr.salary_range_min AND hr.salary_range_max THEN 20
+        WHEN (hc.hourly_rate * 160) <= hr.salary_range_max * 1.1 THEN 15
+        WHEN (hc.hourly_rate * 160) <= hr.salary_range_max * 1.2 THEN 10
+        ELSE 0
+    END
+) >= 30 -- Minimum total score for consideration
+ORDER BY (
+    location_match_score + experience_match_score + skill_match_score + salary_match_score
+) DESC, hr.urgency_level DESC;
+```
+
+## Performance Optimization
+
+### Indexes for Household Queries
+
+```sql
+-- Core household table indexes
+CREATE INDEX idx_householder_user ON households_householder(user_id);
+CREATE INDEX idx_householder_city ON households_householder(current_city);
+CREATE INDEX idx_householder_hiring ON households_householder(is_actively_hiring);
+CREATE INDEX idx_householder_salary_range ON households_householder(salary_range_min, salary_range_max);
+CREATE INDEX idx_householder_urgency ON households_householder(urgency_level);
+CREATE INDEX idx_householder_active ON households_householder(last_active);
+
+-- Job requirements indexes
+CREATE INDEX idx_jobrequirement_household ON households_jobrequirement(householder_id);
+CREATE INDEX idx_jobrequirement_active ON households_jobrequirement(is_active);
+CREATE INDEX idx_jobrequirement_job_type ON households_jobrequirement(job_type);
+CREATE INDEX idx_jobrequirement_skills ON households_jobrequirement USING GIN(required_skills);
+
+-- Family member indexes
+CREATE INDEX idx_familymember_household ON households_familymember(householder_id);
+CREATE INDEX idx_familymember_type ON households_familymember(member_type);
+CREATE INDEX idx_familymember_special_needs ON households_familymember(has_special_needs);
+CREATE INDEX idx_familymember_active ON households_familymember(is_active);
+
+-- Property feature indexes
+CREATE INDEX idx_propertyfeature_household ON households_propertyfeature(householder_id);
+CREATE INDEX idx_propertyfeature_rooms ON households_propertyfeature(total_rooms);
+CREATE INDEX idx_propertyfeature_amenities ON households_propertyfeature(has_washing_machine, has_dishwasher);
+
+-- Preference indexes
+CREATE INDEX idx_preference_household ON households_preference(householder_id);
+CREATE INDEX idx_preference_distance ON households_preference(max_commute_distance_km);
+CREATE INDEX idx_preference_importance ON households_preference(reliability_importance, flexibility_importance);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="House Helper Models" href="/database-schemas/househelps" icon="broom">
+    House helper profiles and service schemas
+  </Card>
+  <Card title="Chat Models" href="/database-schemas/chats" icon="message">
+    Real-time messaging and conversation schemas
+  </Card>
+  <Card title="Shortlist Models" href="/database-schemas/shortlist" icon="heart">
+    Matching and like/dislike system schemas
+  </Card>
+  <Card title="Verification Models" href="/database-schemas/verification" icon="shield-check">
+    Identity and background verification schemas
+  </Card>
+</CardGroup>

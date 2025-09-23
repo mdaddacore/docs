@@ -3,11 +3,11 @@
   "theme": "mint",
   "name": "Mdadda API Documentation",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7e22ce",
+    "light": "#a855f7",
+    "dark": "#581c87"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.ico",
   "navigation": {
     "tabs": [
       {
@@ -64,6 +64,44 @@
               "api-reference/endpoint/create",
               "api-reference/endpoint/delete",
               "api-reference/endpoint/webhook"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Database Schemas",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "database-schemas/introduction",
+              "database-schemas/architecture"
+            ]
+          },
+          {
+            "group": "Core Models",
+            "pages": [
+              "database-schemas/users",
+              "database-schemas/core",
+              "database-schemas/marketplace"
+            ]
+          },
+          {
+            "group": "Application Models",
+            "pages": [
+              "database-schemas/househelps",
+              "database-schemas/households",
+              "database-schemas/chats",
+              "database-schemas/shortlist",
+              "database-schemas/verification"
+            ]
+          },
+          {
+            "group": "System Models",
+            "pages": [
+              "database-schemas/feeds",
+              "database-schemas/waitlist",
+              "database-schemas/relationships"
             ]
           }
         ]

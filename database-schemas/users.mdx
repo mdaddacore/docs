@@ -1,0 +1,571 @@
+---
+title: "User Models Schema"
+description: "Detailed schema documentation for user management, authentication, and profile models"
+icon: "users"
+---
+
+# User Models Schema
+
+The user management system in Mdadda is built around a custom User model with extensions for different user types (house helpers and house holders), comprehensive authentication integration with Firebase, and device management.
+
+## Core User Model
+
+### User Table (`users_user`)
+
+The central user model extending Django's AbstractBaseUser with custom fields for the marketplace platform.
+
+```sql
+CREATE TABLE users_user (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(254) UNIQUE NOT NULL,
+    username VARCHAR(150) UNIQUE,
+    first_name VARCHAR(150) NOT NULL,
+    last_name VARCHAR(150) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('house_helper', 'house_holder', 'admin')),
+
+    -- Authentication fields
+    password VARCHAR(128) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_staff BOOLEAN DEFAULT FALSE,
+    is_superuser BOOLEAN DEFAULT FALSE,
+    last_login TIMESTAMP WITH TIME ZONE,
+
+    -- Profile fields
+    phone_number VARCHAR(20),
+    dob DATE,
+    nationality VARCHAR(100),
+    current_city VARCHAR(100),
+    gender VARCHAR(10) CHECK (gender IN ('male', 'female', 'other')),
+    bio TEXT,
+    profile_picture VARCHAR(200),
+
+    -- Firebase integration
+    firebase_uid VARCHAR(128) UNIQUE,
+    social_provider VARCHAR(50),
+    social_id VARCHAR(100),
+
+    -- Status and verification
+    is_verified BOOLEAN DEFAULT FALSE,
+    verification_status VARCHAR(20) DEFAULT 'pending',
+    onboarding_completed BOOLEAN DEFAULT FALSE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    UNIQUE(social_provider, social_id),
+    CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+);
+```
+
+### Model Fields Documentation
+
+| Field | Type | Description | Constraints |
+|-------|------|-------------|-------------|
+| `id` | UUID | Primary key | Auto-generated UUID |
+| `email` | VARCHAR(254) | User email address | Unique, NOT NULL, validated format |
+| `username` | VARCHAR(150) | Optional username | Unique, auto-generated if not provided |
+| `first_name` | VARCHAR(150) | User's first name | NOT NULL |
+| `last_name` | VARCHAR(150) | User's last name | NOT NULL |
+| `role` | VARCHAR(20) | User role in platform | CHECK constraint for valid roles |
+| `phone_number` | VARCHAR(20) | International phone number | Kenya region validation (+254) |
+| `dob` | DATE | Date of birth | Required for house helpers |
+| `firebase_uid` | VARCHAR(128) | Firebase user identifier | Unique |
+| `is_verified` | BOOLEAN | Verification status | Default FALSE |
+| `onboarding_completed` | BOOLEAN | Profile completion status | Default FALSE |
+
+### Indexes
+
+```sql
+-- Primary indexes
+CREATE INDEX idx_users_email ON users_user(email);
+CREATE INDEX idx_users_username ON users_user(username);
+CREATE INDEX idx_users_firebase_uid ON users_user(firebase_uid);
+
+-- Composite indexes for common queries
+CREATE INDEX idx_users_role_active ON users_user(role, is_active);
+CREATE INDEX idx_users_active_verified ON users_user(is_active, is_verified);
+CREATE INDEX idx_users_role_city ON users_user(role, current_city) WHERE is_active = TRUE;
+
+-- Social authentication
+CREATE INDEX idx_users_social ON users_user(social_provider, social_id);
+
+-- Performance indexes
+CREATE INDEX idx_users_created ON users_user(created_at);
+CREATE INDEX idx_users_updated ON users_user(updated_at);
+```
+
+## User Role Extensions
+
+### House Helper Model (`househelps_househelper`)
+
+Extended profile for house helpers with service-specific information.
+
+```sql
+CREATE TABLE househelps_househelper (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+
+    -- Service details
+    job_type VARCHAR(50) NOT NULL,
+    hourly_rate DECIMAL(10,2) CHECK (hourly_rate >= 0),
+    experience_years INTEGER CHECK (experience_years >= 0),
+    availability_status VARCHAR(20) DEFAULT 'available'
+        CHECK (availability_status IN ('available', 'busy', 'offline')),
+
+    -- Work preferences
+    preferred_working_hours VARCHAR(20)
+        CHECK (preferred_working_hours IN ('full_day', 'half_day', 'flexible', 'night_shift')),
+    preferred_days_off TEXT[], -- Array of days
+    willing_to_travel BOOLEAN DEFAULT FALSE,
+    max_travel_distance INTEGER, -- in kilometers
+
+    -- Professional info
+    education_level VARCHAR(20)
+        CHECK (education_level IN ('primary', 'secondary', 'diploma', 'degree', 'masters', 'phd', 'other')),
+    languages TEXT[], -- Array of languages
+    certifications TEXT[], -- Array of certifications
+
+    -- Availability
+    availability_from DATE,
+    interview_availability VARCHAR(100),
+
+    -- Profile enhancement
+    tagline VARCHAR(200),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### House Holder Model (`households_householder`)
+
+Extended profile for house holders with household-specific requirements.
+
+```sql
+CREATE TABLE households_householder (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+
+    -- Household details
+    household_size INTEGER DEFAULT 1 CHECK (household_size > 0),
+    number_of_children INTEGER DEFAULT 0 CHECK (number_of_children >= 0),
+    has_pets BOOLEAN DEFAULT FALSE,
+    pet_types TEXT[], -- Array of pet types
+
+    -- Location details
+    residence_type VARCHAR(50),
+    neighborhood VARCHAR(100),
+
+    -- Requirements
+    work_schedule VARCHAR(100),
+    experience_required VARCHAR(100),
+    salary_range_min INTEGER CHECK (salary_range_min >= 0),
+    salary_range_max INTEGER CHECK (salary_range_max >= salary_range_min),
+    expected_start_date DATE,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## Skills and Expertise
+
+### Skills Model (`core_skill`)
+
+```sql
+CREATE TABLE core_skill (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    skill_name VARCHAR(100) UNIQUE NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### House Helper Skills Junction Table
+
+```sql
+CREATE TABLE househelps_househelper_skills (
+    id SERIAL PRIMARY KEY,
+    househelper_id UUID NOT NULL REFERENCES househelps_househelper(id) ON DELETE CASCADE,
+    skill_id UUID NOT NULL REFERENCES core_skill(id) ON DELETE CASCADE,
+    proficiency_level VARCHAR(20) DEFAULT 'intermediate'
+        CHECK (proficiency_level IN ('beginner', 'intermediate', 'advanced', 'expert')),
+    years_of_experience INTEGER DEFAULT 0,
+
+    UNIQUE(househelper_id, skill_id)
+);
+```
+
+## Device Management
+
+### User Device Model (`users_userdevice`)
+
+Track user devices for push notifications and security.
+
+```sql
+CREATE TABLE users_userdevice (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+
+    -- Device information
+    device_id VARCHAR(255) NOT NULL,
+    device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('ios', 'android', 'web')),
+    device_name VARCHAR(100),
+
+    -- Push notification tokens
+    fcm_token VARCHAR(255),
+    apns_token VARCHAR(255),
+
+    -- Device details
+    platform_version VARCHAR(50),
+    app_version VARCHAR(50),
+
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(user_id, device_id)
+);
+```
+
+## Authentication and Security
+
+### User Sessions Model (`django_session`)
+
+Django's built-in session management extended for the platform.
+
+```sql
+CREATE TABLE django_session (
+    session_key VARCHAR(40) PRIMARY KEY,
+    session_data TEXT NOT NULL,
+    expire_date TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX django_session_expire_date_idx ON django_session(expire_date);
+```
+
+### Password Reset Tokens
+
+```sql
+CREATE TABLE users_passwordresettoken (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users_user(id) ON DELETE CASCADE,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    is_used BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX idx_password_reset_token ON users_passwordresettoken(token);
+CREATE INDEX idx_password_reset_expires ON users_passwordresettoken(expires_at);
+```
+
+## Common Queries
+
+### User Profile Queries
+
+```sql
+-- Get complete user profile with role-specific data
+SELECT
+    u.*,
+    CASE
+        WHEN u.role = 'house_helper' THEN json_build_object(
+            'job_type', hh.job_type,
+            'hourly_rate', hh.hourly_rate,
+            'experience_years', hh.experience_years,
+            'availability_status', hh.availability_status
+        )
+        WHEN u.role = 'house_holder' THEN json_build_object(
+            'household_size', ho.household_size,
+            'number_of_children', ho.number_of_children,
+            'has_pets', ho.has_pets
+        )
+        ELSE NULL
+    END as role_data
+FROM users_user u
+LEFT JOIN househelps_househelper hh ON u.id = hh.user_id AND u.role = 'house_helper'
+LEFT JOIN households_householder ho ON u.id = ho.user_id AND u.role = 'house_holder'
+WHERE u.id = $1;
+
+-- Get house helper with skills
+SELECT
+    u.first_name,
+    u.last_name,
+    u.email,
+    hh.hourly_rate,
+    hh.experience_years,
+    array_agg(s.skill_name) as skills
+FROM users_user u
+JOIN househelps_househelper hh ON u.id = hh.user_id
+JOIN househelps_househelper_skills hhs ON hh.id = hhs.househelper_id
+JOIN core_skill s ON hhs.skill_id = s.id
+WHERE u.role = 'house_helper'
+    AND u.is_active = TRUE
+    AND u.current_city = $1
+GROUP BY u.id, hh.id;
+```
+
+### Authentication Queries
+
+```sql
+-- Find user by email or username
+SELECT * FROM users_user
+WHERE (email = $1 OR username = $1)
+    AND is_active = TRUE;
+
+-- Find user by Firebase UID
+SELECT * FROM users_user
+WHERE firebase_uid = $1
+    AND is_active = TRUE;
+
+-- Find user by social authentication
+SELECT * FROM users_user
+WHERE social_provider = $1
+    AND social_id = $2
+    AND is_active = TRUE;
+```
+
+### Analytics Queries
+
+```sql
+-- User registration analytics
+SELECT
+    DATE(created_at) as registration_date,
+    role,
+    COUNT(*) as new_users,
+    COUNT(*) FILTER (WHERE onboarding_completed = TRUE) as completed_onboarding
+FROM users_user
+WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(created_at), role
+ORDER BY registration_date DESC;
+
+-- User activity by city
+SELECT
+    current_city,
+    role,
+    COUNT(*) as user_count,
+    COUNT(*) FILTER (WHERE last_login >= CURRENT_DATE - INTERVAL '7 days') as active_users
+FROM users_user
+WHERE is_active = TRUE
+    AND current_city IS NOT NULL
+GROUP BY current_city, role
+ORDER BY user_count DESC;
+
+-- Skill distribution
+SELECT
+    s.skill_name,
+    s.category,
+    COUNT(hhs.househelper_id) as helper_count,
+    AVG(hh.hourly_rate) as avg_hourly_rate
+FROM core_skill s
+JOIN househelps_househelper_skills hhs ON s.id = hhs.skill_id
+JOIN househelps_househelper hh ON hhs.househelper_id = hh.id
+JOIN users_user u ON hh.user_id = u.id
+WHERE u.is_active = TRUE
+GROUP BY s.id, s.skill_name, s.category
+ORDER BY helper_count DESC;
+```
+
+## Data Validation and Constraints
+
+### Django Model Validation
+
+```python
+# Custom validation in Django models
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+
+class User(AbstractBaseUser):
+    phone_regex = RegexValidator(
+        regex=r'^\+254\d{9}$',
+        message="Phone number must be in format: '+254xxxxxxxxx'"
+    )
+    phone_number = models.CharField(
+        validators=[phone_regex],
+        max_length=17,
+        blank=True
+    )
+
+    def clean(self):
+        super().clean()
+        if self.role == 'house_helper' and not self.dob:
+            raise ValidationError('Date of birth is required for house helpers')
+
+        if self.email:
+            self.email = self.email.lower()
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+```
+
+### Database Triggers
+
+```sql
+-- Update timestamps automatically
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply to all user-related tables
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users_user
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_househelper_updated_at
+    BEFORE UPDATE ON househelps_househelper
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_householder_updated_at
+    BEFORE UPDATE ON households_householder
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+## Performance Optimization
+
+### Materialized Views
+
+```sql
+-- User profile summary for faster queries
+CREATE MATERIALIZED VIEW user_profile_summary AS
+SELECT
+    u.id,
+    u.first_name,
+    u.last_name,
+    u.email,
+    u.role,
+    u.current_city,
+    u.is_verified,
+    u.created_at,
+    CASE
+        WHEN u.role = 'house_helper' THEN hh.hourly_rate
+        ELSE NULL
+    END as hourly_rate,
+    CASE
+        WHEN u.role = 'house_helper' THEN hh.experience_years
+        ELSE NULL
+    END as experience_years,
+    CASE
+        WHEN u.role = 'house_holder' THEN ho.household_size
+        ELSE NULL
+    END as household_size
+FROM users_user u
+LEFT JOIN househelps_househelper hh ON u.id = hh.user_id
+LEFT JOIN households_householder ho ON u.id = ho.user_id
+WHERE u.is_active = TRUE;
+
+-- Refresh the materialized view
+CREATE INDEX idx_user_profile_summary_role_city
+    ON user_profile_summary(role, current_city);
+
+-- Refresh schedule (via cron or Django management command)
+REFRESH MATERIALIZED VIEW CONCURRENTLY user_profile_summary;
+```
+
+## Data Migration Patterns
+
+### User Role Migration
+
+```python
+# Django migration example
+from django.db import migrations
+
+def migrate_user_roles(apps, schema_editor):
+    User = apps.get_model('users', 'User')
+
+    # Update old role values to new ones
+    User.objects.filter(user_type='helper').update(role='house_helper')
+    User.objects.filter(user_type='household').update(role='house_holder')
+
+def reverse_migrate_user_roles(apps, schema_editor):
+    User = apps.get_model('users', 'User')
+
+    # Reverse the migration
+    User.objects.filter(role='house_helper').update(user_type='helper')
+    User.objects.filter(role='house_holder').update(user_type='household')
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ('users', '0001_initial'),
+    ]
+
+    operations = [
+        migrations.RunPython(
+            migrate_user_roles,
+            reverse_migrate_user_roles
+        ),
+    ]
+```
+
+## Security Considerations
+
+### Data Encryption
+
+```sql
+-- Enable pgcrypto extension for encryption
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Encrypt sensitive fields
+ALTER TABLE users_user
+ADD COLUMN encrypted_phone_number BYTEA;
+
+-- Function to encrypt/decrypt phone numbers
+CREATE OR REPLACE FUNCTION encrypt_phone_number(phone_text TEXT)
+RETURNS BYTEA AS $$
+BEGIN
+    RETURN pgp_sym_encrypt(phone_text, current_setting('app.encryption_key'));
+END;
+$$ LANGUAGE plpgsql;
+
+-- Update existing data
+UPDATE users_user
+SET encrypted_phone_number = encrypt_phone_number(phone_number)
+WHERE phone_number IS NOT NULL;
+```
+
+### Row Level Security
+
+```sql
+-- Enable RLS on user table
+ALTER TABLE users_user ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see their own data
+CREATE POLICY user_own_data ON users_user
+    USING (id = current_setting('app.current_user_id')::uuid);
+
+-- Policy: Admins can see all data
+CREATE POLICY admin_all_data ON users_user
+    USING (current_setting('app.user_role') = 'admin');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Models" href="/database-schemas/core" icon="database">
+    Marketplace and business logic model schemas
+  </Card>
+  <Card title="House Helper Models" href="/database-schemas/househelps" icon="broom">
+    Detailed house helper profile and service schemas
+  </Card>
+  <Card title="Household Models" href="/database-schemas/households" icon="house">
+    House holder profiles and requirement schemas
+  </Card>
+  <Card title="Verification Models" href="/database-schemas/verification" icon="shield-check">
+    Identity and background verification schemas
+  </Card>
+</CardGroup>
